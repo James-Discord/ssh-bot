@@ -1,14 +1,12 @@
 const { Client, Intents, MessageEmbed } = require('discord.js');
 const { Client: SSHClient } = require('ssh2');
 
-const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
+const client = new Client({ intents: [Intents.FLAGS.DIRECT_MESSAGES] });
 const prefix = '!';
 
 client.on('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
-
-const activeSessions = new Map();
 
 client.on('messageCreate', async (message) => {
   if (!message.guild) return;
@@ -23,7 +21,7 @@ client.on('messageCreate', async (message) => {
   } else if (command === 'hello') {
     await message.reply('Hello, world!');
   } else if (command === 'ssh') {
-    const existingSession = activeSessions.get(message.author.id);
+    const existingSession = message.author.sshSession;
 
     if (existingSession) {
       await message.reply('You already have an active SSH session. Please end it before starting a new one.');
@@ -74,13 +72,13 @@ client.on('messageCreate', async (message) => {
       const ssh = new SSHClient();
       ssh.on('ready', () => {
         const session = { ssh, channel: null };
-        activeSessions.set(message.author.id, session);
+        message.author.sshSession = session; // Store session information on the user object
 
         session.channel = ssh.shell((err, channel) => {
           if (err) {
             dmChannel.send(`Error starting SSH shell: ${err.message}`);
             session.ssh.end();
-            activeSessions.delete(message.author.id);
+            delete message.author.sshSession; // Remove session information from the user object
             return;
           }
 
@@ -88,10 +86,10 @@ client.on('messageCreate', async (message) => {
           collector.on('collect', (m) => {
             const content = m.content.trim();
             if (content === '❌') {
-              existingSession.ssh.end();
+              session.ssh.end();
               collector.stop();
             } else {
-              existingSession.dmChannel.write(content + '\n');
+              session.channel.write(content + '\n');
             }
           });
 
@@ -105,7 +103,7 @@ client.on('messageCreate', async (message) => {
               .setTitle(`SSH session ended for server "${sshConfig.host}"`)
               .setDescription('SSH session closed.');
             dmChannel.send(embed);
-            activeSessions.delete(message.author.id);
+            delete message.author.sshSession; // Remove session information from the user object
           });
         });
 
