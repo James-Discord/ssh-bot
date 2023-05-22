@@ -84,8 +84,6 @@ client.on('messageCreate', async (message) => {
             return;
           }
 
-          const output = [];
-
           const collector = dmChannel.createMessageCollector({ filter, time: 600000 });
           collector.on('collect', (m) => {
             const content = m.content.trim();
@@ -98,13 +96,14 @@ client.on('messageCreate', async (message) => {
           });
 
           channel.on('data', (data) => {
-            output.push(data.toString());
+            const output = data.toString();
+            dmChannel.send(`\`\`\`${output}\`\`\``);
           });
 
           channel.on('close', () => {
             const embed = new MessageEmbed()
               .setTitle(`SSH session ended for server "${sshConfig.host}"`)
-              .setDescription(`\`\`\`${output.join('')}\`\`\``);
+              .setDescription('SSH session closed.');
             dmChannel.send(embed);
             activeSessions.delete(message.author.id);
           });
