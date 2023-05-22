@@ -98,7 +98,7 @@ client.on('messageCreate', async (message) => {
 
       const ssh = new SSHClient();
       ssh.on('ready', () => {
-        const session = { ssh, channel: null, message: null };
+        const session = { ssh, channel: null, message: null, output: '' };
         activeSessions.set(message.author.id, session);
 
         session.channel = ssh.shell((err, channel) => {
@@ -128,17 +128,30 @@ client.on('messageCreate', async (message) => {
               }
             });
 
-            let output = ''; // Store the accumulated output
-
             channel.on('data', (data) => {
-              output += data.toString();
-              const sanitizedOutput = Util.escapeMarkdown(output); // Escape markdown characters
-              const updatedEmbed = new MessageEmbed()
-                .setTitle(`SSH session for server "${sshConfig.host}"`)
-                .setDescription(`\`\`\`${sanitizedOutput}\`\`\``)
-                .setColor('#007bff');
+              const output = data.toString();
+              session.output += output;
 
-              session.message.edit({ embeds: [updatedEmbed] });
+              if (session.output.length > 2000) {
+                const chunks = Util.splitMessage(session.output, { maxLength: 2000 });
+                for (const chunk of chunks) {
+                  const updatedEmbed = new MessageEmbed()
+                    .setTitle(`SSH session for server "${sshConfig.host}"`)
+                    .setDescription(`\`\`\`${chunk}\`\`\``)
+                    .setColor('#007bff');
+
+                  session.message.channel.send({ embeds: [updatedEmbed] });
+                }
+
+                session.output = '';
+              } else {
+                const updatedEmbed = new MessageEmbed()
+                  .setTitle(`SSH session for server "${sshConfig.host}"`)
+                  .setDescription(`\`\`\`${session.output}\`\`\``)
+                  .setColor('#007bff');
+
+                session.message.edit({ embeds: [updatedEmbed] });
+              }
             });
 
             channel.on('close', () => {
