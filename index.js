@@ -91,7 +91,7 @@ client.on('messageCreate', async (message) => {
               existingSession.ssh.end();
               collector.stop();
             } else {
-              existingSession.channel.write(content + '\n');
+              existingSession.dmChannel.write(content + '\n');
             }
           });
 
