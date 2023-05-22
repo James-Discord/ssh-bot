@@ -81,7 +81,7 @@ client.on('messageCreate', async (message) => {
 
       const confirmationCollector = confirmationMessage.createReactionCollector({ filter: filterConfirmation, time: 60000 });
 
-      confirmationCollector.on('collect', (reaction) => {
+      confirmationCollector.on('collect', async (reaction, user) => {
         if (reaction.emoji.name === '✅') {
           confirmationCollector.stop();
 
@@ -132,6 +132,7 @@ client.on('messageCreate', async (message) => {
         } else if (reaction.emoji.name === '❌') {
           confirmationCollector.stop();
           dmChannel.send('SSH connection cancelled.');
+          activeSessions.delete(message.author.id);
         }
       });
     });
