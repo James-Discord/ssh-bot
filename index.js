@@ -88,10 +88,10 @@ client.on('messageCreate', async (message) => {
           collector.on('collect', (m) => {
             const content = m.content.trim();
             if (content === '❌') {
-              session.ssh.end();
+              existingSession.ssh.end();
               collector.stop();
             } else {
-              session.channel.write(content + '\n');
+              existingSession.channel.write(content + '\n');
             }
           });
 
