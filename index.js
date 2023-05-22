@@ -44,7 +44,18 @@ client.on('messageCreate', async (message) => {
 
     let promptCount = 0;
 
-    dmChannel.send('Please provide the SSH details for the connection:');
+    const sendPrompt = (promptMessage) => {
+      dmChannel.send(promptMessage);
+    };
+
+    const promptMessages = [
+      'Enter the SSH host (IP or domain):',
+      'Enter the SSH port:',
+      'Enter the SSH username:',
+      'Enter the SSH password:'
+    ];
+
+    sendPrompt(promptMessages[promptCount]);
 
     collector.on('collect', (m) => {
       const input = m.content.trim();
@@ -53,17 +64,17 @@ client.on('messageCreate', async (message) => {
         case 0:
           sshConfig.host = input;
           promptCount++;
-          dmChannel.send('Enter the SSH port:');
+          sendPrompt(promptMessages[promptCount]);
           break;
         case 1:
           sshConfig.port = parseInt(input, 10);
           promptCount++;
-          dmChannel.send('Enter the SSH username:');
+          sendPrompt(promptMessages[promptCount]);
           break;
         case 2:
           sshConfig.username = input;
           promptCount++;
-          dmChannel.send('Enter the SSH password:');
+          sendPrompt(promptMessages[promptCount]);
           break;
         case 3:
           sshConfig.password = input;
@@ -153,9 +164,8 @@ client.on('messageCreate', async (message) => {
     });
 
     ssh.connect(sshConfig); // Connect SSH after all prompts are collected
-
-    await dmChannel.send('Enter the SSH host (IP or domain):');
   }
 });
+
 
 client.login('MTExMDI3MzI5MDY1MzY3NTU1MQ.GPZBH9.Qut3sr1BKdBOyTFvXgrdjSrGQAD5QrquXe29YE');
