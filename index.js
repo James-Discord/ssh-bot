@@ -132,7 +132,7 @@ client.on('messageCreate', async (message) => {
               const output = data.toString();
               session.output += output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, ''); // Remove escape sequences
 
-              const maxChunkLength = 1900;
+              const maxChunkLength = 1999;
               const splitCharacter = '\n--- Split ---\n'; // Choose a split character that won't be present in the output
 
               if (session.output.length > maxChunkLength) {
