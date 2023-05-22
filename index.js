@@ -1,5 +1,6 @@
 const { Client, Intents, MessageEmbed, Util } = require('discord.js');
 const { Client: SSHClient } = require('ssh2');
+const util = require('util');
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
 const prefix = '!';
@@ -46,7 +47,7 @@ client.on('messageCreate', async (message) => {
       'Enter the SSH host (IP or domain):',
       'Enter the SSH port:',
       'Enter the SSH username:',
-      'Enter the SSH password:'
+      'Enter the SSH password:',
     ];
 
     let promptCount = 0;
@@ -100,7 +101,7 @@ client.on('messageCreate', async (message) => {
         const session = { ssh, channel: null, message: null, output: '' };
         activeSessions.set(message.author.id, session);
 
-        session.channel = session.ssh.shell({ term: process.env.TERM || 'xterm-256color' }, (err, channel) => {
+        session.channel = ssh.shell((err, channel) => {
           if (err) {
             dmChannel.send(`Error starting SSH shell: ${err.message}`);
             session.ssh.end();
@@ -127,19 +128,16 @@ client.on('messageCreate', async (message) => {
               }
             });
 
-            session.channel.on('data', (data) => {
+            channel.on('data', (data) => {
               const output = data.toString();
-              session.output += output;
+              session.output += output.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, ''); // Remove escape sequences
 
-              // Remove ANSI escape codes from the output
-              const cleanedOutput = session.output.replace(/\x1B\[[0-9;]*[mG]/g, '');
-
-              if (cleanedOutput.length > 2000) {
-                const chunks = Util.splitMessage(cleanedOutput, { maxLength: 2000 });
+              if (session.output.length > 2000) {
+                const chunks = Util.splitMessage(session.output, { maxLength: 2000 });
                 for (const chunk of chunks) {
                   const updatedEmbed = new MessageEmbed()
                     .setTitle(`SSH session for server "${sshConfig.host}"`)
-                    .setDescription(`\`\`\`${chunk}\`\`\``)
+                    .setDescription('```\n' + chunk + '```')
                     .setColor('#007bff');
 
                   session.message.channel.send({ embeds: [updatedEmbed] });
@@ -149,14 +147,14 @@ client.on('messageCreate', async (message) => {
               } else {
                 const updatedEmbed = new MessageEmbed()
                   .setTitle(`SSH session for server "${sshConfig.host}"`)
-                  .setDescription(`\`\`\`${cleanedOutput}\`\`\``)
+                  .setDescription('```\n' + session.output + '```')
                   .setColor('#007bff');
 
                 session.message.edit({ embeds: [updatedEmbed] });
               }
             });
 
-            session.channel.on('close', () => {
+            channel.on('close', () => {
               const embed = new MessageEmbed()
                 .setTitle(`SSH session ended for server "${sshConfig.host}"`)
                 .setDescription('SSH session closed')
