@@ -100,7 +100,7 @@ client.on('messageCreate', async (message) => {
         const session = { ssh, channel: null, message: null, output: '' };
         activeSessions.set(message.author.id, session);
 
-        session.channel = ssh.shell((err, channel) => {
+        session.channel = session.ssh.shell({ term: process.env.TERM || 'xterm-256color' }, (err, channel) => {
           if (err) {
             dmChannel.send(`Error starting SSH shell: ${err.message}`);
             session.ssh.end();
