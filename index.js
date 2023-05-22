@@ -132,8 +132,8 @@ client.on('messageCreate', async (message) => {
               const output = data.toString();
               session.output += output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, ''); // Remove escape sequences
 
-              if (session.output.length > 2000) {
-                const chunks = Util.splitMessage(session.output, { maxLength: 2000 });
+              if (session.output.length > 1900) {
+                const chunks = Util.splitMessage(session.output, { maxLength: 1900 });
                 for (const chunk of chunks) {
                   const updatedEmbed = new MessageEmbed()
                     .setTitle(`SSH session for server "${sshConfig.host}"`)
