@@ -92,7 +92,7 @@ client.on('messageCreate', async (message) => {
             if (content === '❌') {
               session.ssh.end();
               collector.stop();
-            } else {
+            } else if (content !== '') { // Check if the content is not empty
               session.channel.stdin.write(content + '\n');
             }
           });
