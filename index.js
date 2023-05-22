@@ -1,4 +1,4 @@
-const { Client, Intents, MessageEmbed, MessageActionRow, MessageButton } = require('discord.js');
+const { Client, Intents } = require('discord.js');
 const { Client: SSHClient } = require('ssh2');
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
@@ -71,75 +71,56 @@ client.on('messageCreate', async (message) => {
     });
 
     collector.on('end', async (collected) => {
-      const confirmationMessage = await dmChannel.send('All SSH details collected. Do you want to continue?');
-      await confirmationMessage.react('✅');
-      await confirmationMessage.react('❌');
+      const ssh = new SSHClient();
+      ssh.on('ready', () => {
+        const session = { ssh, channel: null };
+        activeSessions.set(message.author.id, session);
 
-      const filterConfirmation = (reaction, user) => {
-        return ['✅', '❌'].includes(reaction.emoji.name) && user.id === message.author.id;
-      };
+        session.channel = ssh.shell((err, channel) => {
+          if (err) {
+            dmChannel.send(`Error starting SSH shell: ${err.message}`);
+            session.ssh.end();
+            activeSessions.delete(message.author.id);
+            return;
+          }
 
-      const confirmationCollector = confirmationMessage.createReactionCollector({ filter: filterConfirmation, time: 60000 });
+          const output = [];
 
-      confirmationCollector.on('collect', async (reaction, user) => {
-        if (reaction.emoji.name === '✅') {
-          confirmationCollector.stop();
+          const collector = dmChannel.createMessageCollector({ filter, time: 600000 });
+          collector.on('collect', (m) => {
+            const content = m.content.trim();
+            if (content === '❌') {
+              session.ssh.end();
+              collector.stop();
+            } else {
+              session.channel.write(content + '\n');
+            }
+          });
 
-          const ssh = new SSHClient();
-          ssh.on('ready', () => {
-            const session = { ssh, channel: null };
-            activeSessions.set(message.author.id, session);
+          channel.on('data', (data) => {
+            output.push(data.toString());
+          });
 
-            session.channel = ssh.shell((err, channel) => {
-              if (err) {
-                dmChannel.send(`Error starting SSH shell: ${err.message}`);
-                session.ssh.end();
-                activeSessions.delete(message.author.id);
-                return;
-              }
-
-              const output = [];
-
-              const collector = dmChannel.createMessageCollector({ filter, time: 600000 });
-              collector.on('collect', (m) => {
-                const content = m.content.trim();
-                if (content === '❌') {
-                  session.ssh.end();
-                  collector.stop();
-                } else {
-                  session.channel.write(content + '\n');
-                }
-              });
-
-              channel.on('data', (data) => {
-                output.push(data.toString());
-              });
-
-              channel.on('close', () => {
-                const embed = new MessageEmbed()
-                  .setTitle(`SSH session ended for server "${sshConfig.host}"`)
-                  .setDescription(`\`\`\`${output.join('')}\`\`\``);
-                dmChannel.send(embed);
-                activeSessions.delete(message.author.id);
-              });
-            });
-          }).on('error', (err) => {
-            message.reply(`SSH connection error: ${err.message}`);
-            ssh.end();
-          }).on('end', () => {
-            message.reply('SSH connection closed.');
-          }).connect(sshConfig);
-        } else if (reaction.emoji.name === '❌') {
-          confirmationCollector.stop();
-          dmChannel.send('SSH connection cancelled.');
-          activeSessions.delete(message.author.id);
-        }
-      });
+          channel.on('close', () => {
+            const embed = new MessageEmbed()
+              .setTitle(`SSH session ended for server "${sshConfig.host}"`)
+              .setDescription(`\`\`\`${output.join('')}\`\`\``);
+            dmChannel.send(embed);
+            activeSessions.delete(message.author.id);
+          });
+        });
+      }).on('error', (err) => {
+        message.reply(`SSH connection error: ${err.message}`);
+        ssh.end();
+      }).on('end', () => {
+        message.reply('SSH connection closed.');
+      }).connect(sshConfig);
     });
 
     await dmChannel.send('Please provide the SSH details for the connection:');
     await dmChannel.send('Enter the SSH host (IP or domain):');
   }
 });
+
 
 client.login('MTExMDI3MzI5MDY1MzY3NTU1MQ.GPZBH9.Qut3sr1BKdBOyTFvXgrdjSrGQAD5QrquXe29YE');
