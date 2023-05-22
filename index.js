@@ -130,7 +130,7 @@ client.on('messageCreate', async (message) => {
 
             channel.on('data', (data) => {
               const output = data.toString();
-              session.output += output.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, ''); // Remove escape sequences
+              session.output += output.replace(/\u001B\[[0-9]{1,2}(;[0-9]{1,2})?[m|K]/g, ''); // Remove escape sequences
 
               if (session.output.length > 2000) {
                 const chunks = Util.splitMessage(session.output, { maxLength: 2000 });
