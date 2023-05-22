@@ -1,5 +1,6 @@
-const { Client, Intents, MessageEmbed } = require('discord.js');
+const { Client, Intents, MessageEmbed, Util } = require('discord.js');
 const { Client: SSHClient } = require('ssh2');
+const util = require('util');
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
 const prefix = '!';
@@ -131,9 +132,10 @@ client.on('messageCreate', async (message) => {
 
             channel.on('data', (data) => {
               output += data.toString();
+              const sanitizedOutput = Util.escapeMarkdown(output); // Escape markdown characters
               const updatedEmbed = new MessageEmbed()
                 .setTitle(`SSH session for server "${sshConfig.host}"`)
-                .setDescription(`\`\`\`${output}\`\`\``)
+                .setDescription(`\`\`\`${sanitizedOutput}\`\`\``)
                 .setColor('#007bff');
 
               session.message.edit({ embeds: [updatedEmbed] });
@@ -179,6 +181,5 @@ client.on('messageCreate', async (message) => {
     };
   }
 });
-
 
 client.login('MTExMDI3MzI5MDY1MzY3NTU1MQ.GPZBH9.Qut3sr1BKdBOyTFvXgrdjSrGQAD5QrquXe29YE');
