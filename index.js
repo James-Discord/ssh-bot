@@ -133,13 +133,16 @@ client.on('messageCreate', async (message) => {
         .setColor('#28a745');
 
       dmChannel.send({ embeds: [embed] });
+
+      ssh.connect(sshConfig); // Connect SSH after all prompts are collected
     }).on('error', (err) => {
       message.reply(`SSH connection error: ${err.message}`);
       ssh.end();
     }).on('end', () => {
       message.reply('SSH connection closed.');
-    }).connect(sshConfig);
+    });
   }
 });
+
 
 client.login('MTExMDI3MzI5MDY1MzY3NTU1MQ.GPZBH9.Qut3sr1BKdBOyTFvXgrdjSrGQAD5QrquXe29YE');
