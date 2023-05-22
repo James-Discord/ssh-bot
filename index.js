@@ -82,70 +82,72 @@ client.on('messageCreate', async (message) => {
       dmChannel.send({ embeds: [failedEmbed] });
     }, 10 * 60 * 1000);
 
-      const ssh = new SSHClient();
-      ssh.on('ready', () => {
-        const session = { ssh, channel: null, message: null };
-        activeSessions.set(message.author.id, session);
+    const ssh = new SSHClient();
+    ssh.on('ready', () => {
+      const session = { ssh, channel: null, message: null };
+      activeSessions.set(message.author.id, session);
 
-        session.channel = ssh.shell((err, channel) => {
-          if (err) {
-            dmChannel.send(`Error starting SSH shell: ${err.message}`);
-            session.ssh.end();
-            activeSessions.delete(message.author.id);
-            return;
-          }
+      session.channel = ssh.shell((err, channel) => {
+        if (err) {
+          dmChannel.send(`Error starting SSH shell: ${err.message}`);
+          session.ssh.end();
+          activeSessions.delete(message.author.id);
+          return;
+        }
 
+        const embed = new MessageEmbed()
+          .setTitle(`SSH session for server "${sshConfig.host}"`)
+          .setColor('#007bff')
+          .setDescription('Use this channel to execute commands.');
+
+        dmChannel.send({ embeds: [embed] }).then((msg) => {
+          session.message = msg;
+        });
+
+        let outputBuffer = '';
+
+        channel.on('data', (data) => {
+          const output = data.toString().trim();
+          outputBuffer += output + '\n';
           const embed = new MessageEmbed()
-            .setTitle(`SSH session for server "${sshConfig.host}"`)
-            .setColor('#007bff')
-            .setDescription('Use this channel to execute commands.');
+            .setColor('#17c03a')
+            .setDescription(`\`\`\`${outputBuffer}\`\`\``);
 
-          dmChannel.send({ embeds: [embed] }).then((msg) => {
-            session.message = msg;
-          });
+          session.message.edit({ embeds: [embed] });
+        });
 
-          channel.on('data', (data) => {
-            const output = data.toString().trim();
-            const embed = new MessageEmbed()
-              .setColor('#17c03a')
-              .setDescription(`\`\`\`${output}\`\`\``);
+        channel.on('close', () => {
+          dmChannel.send('SSH session closed.');
+          session.ssh.end();
+          activeSessions.delete(message.author.id);
+        });
 
-            session.message.edit({ embeds: [embed] });
-          });
+        channel.stderr.on('data', (data) => {
+          const error = data.toString().trim();
+          const embed = new MessageEmbed()
+            .setColor('#dc3545')
+            .setDescription(`\`\`\`${error}\`\`\``);
 
-          channel.on('close', () => {
-            dmChannel.send('SSH session closed.');
-            session.ssh.end();
-            activeSessions.delete(message.author.id);
-          });
-
-          channel.stderr.on('data', (data) => {
-            const error = data.toString().trim();
-            const embed = new MessageEmbed()
-              .setColor('#dc3545')
-              .setDescription(`\`\`\`${error}\`\`\``);
-
-            session.message.edit({ embeds: [embed] });
-          });
+          session.message.edit({ embeds: [embed] });
         });
       });
+    });
 
-      ssh.on('error', (err) => {
-        const embed = new MessageEmbed()
-          .setTitle('SSH Connection Error')
-          .setDescription(`Failed to connect to "${sshConfig.host}": ${err.message}`)
-          .setColor('#dc3545');
+    ssh.on('error', (err) => {
+      const embed = new MessageEmbed()
+        .setTitle('SSH Connection Error')
+        .setDescription(`Failed to connect to "${sshConfig.host}": ${err.message}`)
+        .setColor('#dc3545');
 
-        dmChannel.send({ embeds: [embed] });
-        activeSessions.delete(message.author.id);
-      });
+      dmChannel.send({ embeds: [embed] });
+      activeSessions.delete(message.author.id);
+    });
 
-      ssh.connect({
-        host: sshConfig.host,
-        port: sshConfig.port || 22,
-        username: sshConfig.username,
-        password: sshConfig.password,
-      });
+    ssh.connect({
+      host: sshConfig.host,
+      port: sshConfig.port || 22,
+      username: sshConfig.username,
+      password: sshConfig.password,
     });
 
     await dmChannel.send('Enter the SSH host (IP or domain):');
