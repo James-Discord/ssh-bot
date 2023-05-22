@@ -1,6 +1,5 @@
 const { Client, Intents, MessageEmbed, Util } = require('discord.js');
 const { Client: SSHClient } = require('ssh2');
-const util = require('util');
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
 const prefix = '!';
@@ -128,12 +127,15 @@ client.on('messageCreate', async (message) => {
               }
             });
 
-            channel.on('data', (data) => {
+            session.channel.on('data', (data) => {
               const output = data.toString();
               session.output += output;
 
-              if (session.output.length > 2000) {
-                const chunks = Util.splitMessage(session.output, { maxLength: 2000 });
+              // Remove ANSI escape codes from the output
+              const cleanedOutput = session.output.replace(/\x1B\[[0-9;]*[mG]/g, '');
+
+              if (cleanedOutput.length > 2000) {
+                const chunks = Util.splitMessage(cleanedOutput, { maxLength: 2000 });
                 for (const chunk of chunks) {
                   const updatedEmbed = new MessageEmbed()
                     .setTitle(`SSH session for server "${sshConfig.host}"`)
@@ -147,14 +149,14 @@ client.on('messageCreate', async (message) => {
               } else {
                 const updatedEmbed = new MessageEmbed()
                   .setTitle(`SSH session for server "${sshConfig.host}"`)
-                  .setDescription(`\`\`\`${session.output}\`\`\``)
+                  .setDescription(`\`\`\`${cleanedOutput}\`\`\``)
                   .setColor('#007bff');
 
                 session.message.edit({ embeds: [updatedEmbed] });
               }
             });
 
-            channel.on('close', () => {
+            session.channel.on('close', () => {
               const embed = new MessageEmbed()
                 .setTitle(`SSH session ended for server "${sshConfig.host}"`)
                 .setDescription('SSH session closed')
