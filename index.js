@@ -1,4 +1,4 @@
-const { Client, Intents, MessageEmbed } = require('discord.js');
+const { Client, Intents, MessageEmbed, MessageActionRow, MessageButton } = require('discord.js');
 const { Client: SSHClient } = require('ssh2');
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
@@ -71,13 +71,18 @@ client.on('messageCreate', async (message) => {
     });
 
     collector.on('end', async (collected) => {
-      const confirmationMessage = await dmChannel.send('All SSH details collected. Do you want to continue? (yes/no)');
-      const confirmationCollector = dmChannel.createMessageCollector({ filter, time: 60000 });
+      const confirmationMessage = await dmChannel.send('All SSH details collected. Do you want to continue?');
+      await confirmationMessage.react('✅');
+      await confirmationMessage.react('❌');
 
-      confirmationCollector.on('collect', (m) => {
-        const input = m.content.trim().toLowerCase();
+      const filterConfirmation = (reaction, user) => {
+        return ['✅', '❌'].includes(reaction.emoji.name) && user.id === message.author.id;
+      };
 
-        if (input === 'yes' || input === 'y') {
+      const confirmationCollector = confirmationMessage.createReactionCollector({ filter: filterConfirmation, time: 60000 });
+
+      confirmationCollector.on('collect', (reaction) => {
+        if (reaction.emoji.name === '✅') {
           confirmationCollector.stop();
 
           const ssh = new SSHClient();
@@ -124,7 +129,7 @@ client.on('messageCreate', async (message) => {
           }).on('end', () => {
             message.reply('SSH connection closed.');
           }).connect(sshConfig);
-        } else if (input === 'no' || input === 'n') {
+        } else if (reaction.emoji.name === '❌') {
           confirmationCollector.stop();
           dmChannel.send('SSH connection cancelled.');
         }
