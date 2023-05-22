@@ -33,7 +33,7 @@ client.on('messageCreate', async (message) => {
     const dmChannel = await message.author.createDM();
 
     const filter = (m) => m.author.id === message.author.id;
-    const collector = dmChannel.createMessageCollector({ filter, time: 600000 });
+    const collector = dmChannel.createMessageCollector({ filter });
 
     let sshConfig = {
       host: null,
@@ -46,13 +46,7 @@ client.on('messageCreate', async (message) => {
 
     dmChannel.send('Please provide the SSH details for the connection:');
 
-    const timeout = setTimeout(() => {
-      collector.stop('TIMEOUT');
-    }, 600000); // 10 minutes timeout
-
     collector.on('collect', (m) => {
-      clearTimeout(timeout);
-
       const input = m.content.trim();
 
       switch (promptCount) {
@@ -78,11 +72,22 @@ client.on('messageCreate', async (message) => {
       }
     });
 
-    collector.on('end', async (collected, reason) => {
-      if (reason === 'TIMEOUT') {
+    const timeout = setTimeout(() => {
+      collector.stop();
+      const failedEmbed = new MessageEmbed()
+        .setTitle('SSH Connection Failed')
+        .setDescription('SSH connection setup timed out.')
+        .setColor('#dc3545');
+
+      dmChannel.send({ embeds: [failedEmbed] });
+    }, 10 * 60 * 1000);
+
+    collector.on('end', () => {
+      clearTimeout(timeout);
+      if (promptCount < 4) {
         const failedEmbed = new MessageEmbed()
           .setTitle('SSH Connection Failed')
-          .setDescription('Timeout: No response received within 10 minutes.')
+          .setDescription('Failed to collect all required SSH details.')
           .setColor('#dc3545');
 
         dmChannel.send({ embeds: [failedEmbed] });
@@ -91,7 +96,7 @@ client.on('messageCreate', async (message) => {
 
       const ssh = new SSHClient();
       ssh.on('ready', () => {
-        const session = { ssh, channel: null, message: null, commandList: [] };
+        const session = { ssh, channel: null, message: null };
         activeSessions.set(message.author.id, session);
 
         session.channel = ssh.shell((err, channel) => {
@@ -110,23 +115,11 @@ client.on('messageCreate', async (message) => {
           dmChannel.send({ embeds: [embed] }).then((sentMessage) => {
             session.message = sentMessage;
 
-            const collector = dmChannel.createMessageCollector({ filter });
-            collector.on('collect', (m) => {
-              const content = m.content.trim();
-              if (content === '❌') {
-                session.ssh.end();
-                collector.stop();
-              } else {
-                channel.write(content + '\n');
-                session.commandList.push(content);
-              }
-            });
-
             channel.on('data', (data) => {
               const output = data.toString();
               const updatedEmbed = new MessageEmbed()
                 .setTitle(`SSH session for server "${sshConfig.host}"`)
-                .setDescription(`\`\`\`bash\n${session.commandList.join('\n')}\n\n${output}\`\`\``)
+                .setDescription(`\`\`\`${output}\`\`\``)
                 .setColor('#007bff');
 
               session.message.edit({ embeds: [updatedEmbed] });
@@ -140,6 +133,17 @@ client.on('messageCreate', async (message) => {
 
               session.message.edit({ embeds: [embed] });
               activeSessions.delete(message.author.id);
+            });
+
+            const collector = dmChannel.createMessageCollector({ filter });
+            collector.on('collect', (m) => {
+              const content = m.content.trim();
+              if (content === '❌') {
+                session.ssh.end();
+                collector.stop();
+              } else {
+                channel.write(content + '\n');
+              }
             });
           });
         });
@@ -174,5 +178,6 @@ client.on('messageCreate', async (message) => {
     await dmChannel.send('Enter the SSH host (IP or domain):');
   }
 });
+
 
 client.login('MTExMDI3MzI5MDY1MzY3NTU1MQ.GPZBH9.Qut3sr1BKdBOyTFvXgrdjSrGQAD5QrquXe29YE');
