@@ -10,9 +10,6 @@ client.on('ready', () => {
 });
 
 const activeSessions = new Map();
-const messageCounter = new Map();
-const maxChunks = 5; // Maximum number of chunks the bot can send
-const delayDuration = 10 * 60 * 1000; // Delay duration in milliseconds (10 minutes)
 
 client.on('messageCreate', async (message) => {
   if (!message.guild) return;
@@ -135,32 +132,23 @@ client.on('messageCreate', async (message) => {
               const output = data.toString();
               session.output += output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, ''); // Remove escape sequences
 
-              if (session.output.length > 2000) {
-                const chunks = Util.splitMessage(session.output, { maxLength: 2000 });
-                let delay = 0;
+              const maxChunkLength = 1900;
+              const splitCharacter = '\n--- Split ---\n'; // Choose a split character that won't be present in the output
 
-                if (messageCounter.has(message.author.id)) {
-                  const counter = messageCounter.get(message.author.id);
-                  if (counter >= maxChunks) {
-                    delay = delayDuration;
-                    messageCounter.set(message.author.id, 0);
-                  } else {
-                    messageCounter.set(message.author.id, counter + 1);
-                  }
-                } else {
-                  messageCounter.set(message.author.id, 1);
+              if (session.output.length > maxChunkLength) {
+                const chunks = session.output.match(new RegExp(`.{1,${maxChunkLength}}`, 'g'));
+                let updatedOutput = chunks.join(splitCharacter);
+
+                if (session.output.length % maxChunkLength !== 0) {
+                  updatedOutput += splitCharacter + session.output.substr(chunks.length * maxChunkLength);
                 }
 
-                for (const chunk of chunks) {
-                  setTimeout(() => {
-                    const updatedEmbed = new MessageEmbed()
-                      .setTitle(`SSH session for server "${sshConfig.host}"`)
-                      .setDescription('```\n' + chunk + '```')
-                      .setColor('#007bff');
+                const updatedEmbed = new MessageEmbed()
+                  .setTitle(`SSH session for server "${sshConfig.host}"`)
+                  .setDescription('```\n' + updatedOutput + '```')
+                  .setColor('#007bff');
 
-                    session.message.channel.send({ embeds: [updatedEmbed] });
-                  }, delay);
-                }
+                session.message.channel.send({ embeds: [updatedEmbed] });
 
                 session.output = '';
               } else {
