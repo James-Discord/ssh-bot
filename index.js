@@ -91,7 +91,7 @@ client.on('messageCreate', async (message) => {
 
       const ssh = new SSHClient();
       ssh.on('ready', () => {
-        const session = { ssh, channel: null, message: null };
+        const session = { ssh, channel: null, message: null, commandList: [] };
         activeSessions.set(message.author.id, session);
 
         session.channel = ssh.shell((err, channel) => {
@@ -110,7 +110,7 @@ client.on('messageCreate', async (message) => {
           dmChannel.send({ embeds: [embed] }).then((sentMessage) => {
             session.message = sentMessage;
 
-            const collector = dmChannel.createMessageCollector({ filter, time: 600000 });
+            const collector = dmChannel.createMessageCollector({ filter });
             collector.on('collect', (m) => {
               const content = m.content.trim();
               if (content === '❌') {
@@ -118,6 +118,7 @@ client.on('messageCreate', async (message) => {
                 collector.stop();
               } else {
                 channel.write(content + '\n');
+                session.commandList.push(content);
               }
             });
 
@@ -125,7 +126,7 @@ client.on('messageCreate', async (message) => {
               const output = data.toString();
               const updatedEmbed = new MessageEmbed()
                 .setTitle(`SSH session for server "${sshConfig.host}"`)
-                .setDescription(`\`\`\`${output}\`\`\``)
+                .setDescription(`\`\`\`bash\n${session.commandList.join('\n')}\n\n${output}\`\`\``)
                 .setColor('#007bff');
 
               session.message.edit({ embeds: [updatedEmbed] });
@@ -142,15 +143,30 @@ client.on('messageCreate', async (message) => {
             });
           });
         });
+
+        // SSH connection successful confirmation
+        const embed = new MessageEmbed()
+          .setTitle(`SSH session for server "${sshConfig.host}"`)
+          .setDescription('SSH connection established successfully!')
+          .setColor('#28a745');
+
+        dmChannel.send({ embeds: [embed] });
+      }).on('error', (err) => {
+        const failedEmbed = new MessageEmbed()
+          .setTitle('SSH Connection Failed')
+          .setDescription(`Error establishing SSH connection: ${err.message}`)
+          .setColor('#dc3545');
+
+        dmChannel.send({ embeds: [failedEmbed] });
+        ssh.end();
+      }).on('end', () => {
+        const embed = new MessageEmbed()
+          .setTitle('SSH Connection Closed')
+          .setDescription('SSH connection closed.')
+          .setColor('#dc3545');
+
+        dmChannel.send({ embeds: [embed] });
       });
-
-      // SSH connection successful confirmation
-      const embed = new MessageEmbed()
-        .setTitle(`SSH session for server "${sshConfig.host}"`)
-        .setDescription('SSH connection established successfully!')
-        .setColor('#28a745');
-
-      dmChannel.send({ embeds: [embed] });
 
       ssh.connect(sshConfig); // Connect SSH after all prompts are collected
     });
