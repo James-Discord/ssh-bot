@@ -71,11 +71,6 @@ client.on('messageCreate', async (message) => {
     });
 
     collector.on('end', async (collected) => {
-      if (promptCount !== 4) {
-        await dmChannel.send('SSH details collection cancelled. Please try again.');
-        return;
-      }
-
       const confirmationMessage = await dmChannel.send('All SSH details collected. Do you want to continue? (yes/no)');
       const confirmationCollector = dmChannel.createMessageCollector({ filter, time: 60000 });
 
