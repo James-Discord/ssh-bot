@@ -99,7 +99,7 @@ client.on('messageCreate', async (message) => {
                 session.ssh.end();
                 collector.stop();
               } else {
-                session.channel.stdin.write(content + '\n');
+                channel.write(content + '\n');
               }
             });
           });
@@ -143,6 +143,5 @@ client.on('messageCreate', async (message) => {
     });
   }
 });
-
 
 client.login('MTExMDI3MzI5MDY1MzY3NTU1MQ.GPZBH9.Qut3sr1BKdBOyTFvXgrdjSrGQAD5QrquXe29YE');
