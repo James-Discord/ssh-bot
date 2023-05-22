@@ -73,7 +73,7 @@ client.on('messageCreate', async (message) => {
     collector.on('end', async (collected) => {
       const ssh = new SSHClient();
       ssh.on('ready', () => {
-        const session = { ssh, channel: null };
+        const session = { ssh, channel: null, message: null };
         activeSessions.set(message.author.id, session);
 
         session.channel = ssh.shell((err, channel) => {
@@ -84,43 +84,61 @@ client.on('messageCreate', async (message) => {
             return;
           }
 
-          const collector = dmChannel.createMessageCollector({ filter, time: 600000 });
-          collector.on('collect', (m) => {
-            const content = m.content.trim();
-            if (content === '❌') {
-              session.ssh.end();
-              collector.stop();
-            } else {
-              channel.write(content + '\n');
-            }
+          const embed = new MessageEmbed()
+            .setTitle(`SSH session for server "${sshConfig.host}"`)
+            .setDescription('Initializing session...')
+            .setColor('#007bff');
+
+          dmChannel.send({ embeds: [embed] }).then((sentMessage) => {
+            session.message = sentMessage;
+
+            const collector = dmChannel.createMessageCollector({ filter, time: 600000 });
+            collector.on('collect', (m) => {
+              const content = m.content.trim();
+              if (content === '❌') {
+                session.ssh.end();
+                collector.stop();
+              } else {
+                session.channel.stdin.write(content + '\n');
+              }
+            });
           });
 
           channel.on('data', (data) => {
             const output = data.toString();
-            dmChannel.send(`\`\`\`${output}\`\`\``);
+            const updatedEmbed = new MessageEmbed()
+              .setTitle(`SSH session for server "${sshConfig.host}"`)
+              .setDescription(`\`\`\`${output}\`\`\``)
+              .setColor('#007bff');
+
+            session.message.edit({ embeds: [updatedEmbed] });
           });
 
           channel.on('close', () => {
             const embed = new MessageEmbed()
               .setTitle(`SSH session ended for server "${sshConfig.host}"`)
-              .setDescription('SSH session closed.');
-            dmChannel.send(embed);
+              .setDescription('SSH session closed')
+              .setColor('#dc3545');
+
+            session.message.edit({ embeds: [embed] });
             activeSessions.delete(message.author.id);
           });
         });
+      });
 
-        // SSH connection successful confirmation
-        dmChannel.send('SSH connection established successfully!');
-      }).on('error', (err) => {
-        message.reply(`SSH connection error: ${err.message}`);
-        ssh.end();
-      }).on('end', () => {
-        message.reply('SSH connection closed.');
-      }).connect(sshConfig);
-    });
+      // SSH connection successful confirmation
+      const embed = new MessageEmbed()
+        .setTitle(`SSH session for server "${sshConfig.host}"`)
+        .setDescription('SSH connection established successfully!')
+        .setColor('#28a745');
 
-    await dmChannel.send('Please provide the SSH details for the connection:');
-    await dmChannel.send('Enter the SSH host (IP or domain):');
+      dmChannel.send({ embeds: [embed] });
+    }).on('error', (err) => {
+      message.reply(`SSH connection error: ${err.message}`);
+      ssh.end();
+    }).on('end', () => {
+      message.reply('SSH connection closed.');
+    }).connect(sshConfig);
   }
 });
 
