@@ -92,8 +92,8 @@ client.on('messageCreate', async (message) => {
             if (content === '❌') {
               session.ssh.end();
               collector.stop();
-            } else if (content !== '') { // Check if the content is not empty
-              session.channel.stdin.write(content + '\n');
+            } else {
+              session.channel.write(content + '\n');
             }
           });
 
@@ -109,11 +109,9 @@ client.on('messageCreate', async (message) => {
             activeSessions.delete(message.author.id);
           });
         });
-        
-        const embed = new MessageEmbed()
-          .setTitle(`SSH session started for server "${sshConfig.host}"`)
-          .setDescription(`You are now connected via SSH. Use the command \`!endssh\` to end the session.`);
-        dmChannel.send(embed);
+
+        // SSH connection successful confirmation
+        dmChannel.send('SSH connection established successfully!');
       }).on('error', (err) => {
         message.reply(`SSH connection error: ${err.message}`);
         ssh.end();
@@ -124,18 +122,6 @@ client.on('messageCreate', async (message) => {
 
     await dmChannel.send('Please provide the SSH details for the connection:');
     await dmChannel.send('Enter the SSH host (IP or domain):');
-  } else if (command === 'endssh') {
-    const existingSession = activeSessions.get(message.author.id);
-
-    if (!existingSession) {
-      await message.reply('You do not have an active SSH session.');
-      return;
-    }
-
-    existingSession.ssh.end();
-    activeSessions.delete(message.author.id);
-
-    await message.reply('SSH session ended.');
   }
 });
 
