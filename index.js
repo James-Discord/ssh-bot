@@ -132,16 +132,23 @@ client.on('messageCreate', async (message) => {
               const output = data.toString();
               session.output += output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, ''); // Remove escape sequences
 
-              if (session.output.length > 1900) {
-                const chunks = Util.splitMessage(session.output, { maxLength: 1900 });
-                for (const chunk of chunks) {
-                  const updatedEmbed = new MessageEmbed()
-                    .setTitle(`SSH session for server "${sshConfig.host}"`)
-                    .setDescription('```\n' + chunk + '```')
-                    .setColor('#007bff');
+              const maxChunkLength = 1900;
+              const splitCharacter = '\n--- Split ---\n'; // Choose a split character that won't be present in the output
 
-                  session.message.channel.send({ embeds: [updatedEmbed] });
+              if (session.output.length > maxChunkLength) {
+                const chunks = session.output.match(new RegExp(`.{1,${maxChunkLength}}`, 'g'));
+                let updatedOutput = chunks.join(splitCharacter);
+
+                if (session.output.length % maxChunkLength !== 0) {
+                  updatedOutput += splitCharacter + session.output.substr(chunks.length * maxChunkLength);
                 }
+
+                const updatedEmbed = new MessageEmbed()
+                  .setTitle(`SSH session for server "${sshConfig.host}"`)
+                  .setDescription('```\n' + updatedOutput + '```')
+                  .setColor('#007bff');
+
+                session.message.channel.send({ embeds: [updatedEmbed] });
 
                 session.output = '';
               } else {
