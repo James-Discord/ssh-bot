@@ -91,7 +91,7 @@ client.on('messageCreate', async (message) => {
               session.ssh.end();
               collector.stop();
             } else {
-              session.channel.stdin.write(content + '\n');
+              session.channel.send(content + '\n');
             }
           });
 
