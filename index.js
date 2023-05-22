@@ -91,7 +91,13 @@ client.on('messageCreate', async (message) => {
               session.ssh.end();
               collector.stop();
             } else {
-              session.channel.write(content + '\n');
+              session.channel.write(content + '\n', 'utf-8', (err) => {
+                if (err) {
+                  dmChannel.send(`Error sending data to SSH channel: ${err.message}`);
+                  session.ssh.end();
+                  collector.stop();
+                }
+              });
             }
           });
 
