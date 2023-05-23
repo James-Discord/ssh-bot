@@ -210,6 +210,8 @@ async function selectSSHConfig(configs, dmChannel) {
 
   return configs[index];
 }
+async function promptSSHInputs(dmChannel) {
+  const sshConfig = {};
 
   const prompts = [
     { name: 'host', message: 'Enter the SSH host:', example: 'example.com' },
