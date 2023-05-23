@@ -3,7 +3,7 @@ const { Client: SSHClient } = require('ssh2');
 const sqlite3 = require('sqlite3').verbose();
 const util = require('util');
 
-const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
+const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES] });
 const prefix = '!';
 
 // Connect to the SQLite database
@@ -176,9 +176,9 @@ function getSavedSSHConfigs(userId) {
 
 // Function to format saved SSH configurations for display
 function formatSavedSSHConfigs(configs) {
-  return configs.map((config, index) => {
-    return `${index + 1}. Host: ${config.host}, Port: ${config.port}, Username: ${config.username}`;
-  }).join('\n');
+  return configs
+    .map((config, index) => `${index + 1}. Host: ${config.host}, Port: ${config.port}, Username: ${config.username}`)
+    .join('\n');
 }
 
 // Function to prompt the user to select a saved SSH configuration
@@ -268,7 +268,8 @@ async function askToSaveInputs(userId, channel) {
 // Function to save the SSH configuration for a user
 function saveSSHConfig(userId, sshConfig) {
   return new Promise((resolve, reject) => {
-    db.run('INSERT INTO ssh_configs (user_id, host, port, username, password) VALUES (?, ?, ?, ?, ?)',
+    db.run(
+      'INSERT INTO ssh_configs (user_id, host, port, username, password) VALUES (?, ?, ?, ?, ?)',
       [userId, sshConfig.host, sshConfig.port, sshConfig.username, sshConfig.password],
       function (err) {
         if (err) {
@@ -276,7 +277,8 @@ function saveSSHConfig(userId, sshConfig) {
         } else {
           resolve(this.lastID);
         }
-      });
+      }
+    );
   });
 }
 
