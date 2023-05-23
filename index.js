@@ -135,15 +135,21 @@ client.on('messageCreate', async (message) => {
 
               if (session.output.join('').length > maxCharacters) {
                 const removedLines = [];
-                while (session.output.join('').length > maxCharacters) {
-                  const removedLine = session.output.shift();
-                  removedLines.push(removedLine);
+                let currentOutput = session.output.join('');
+                while (currentOutput.length > maxCharacters) {
+                  const firstNewlineIndex = currentOutput.indexOf('\n');
+                  if (firstNewlineIndex !== -1) {
+                    const removedLine = currentOutput.slice(0, firstNewlineIndex + 1);
+                    removedLines.push(removedLine);
+                    currentOutput = currentOutput.slice(firstNewlineIndex + 1);
+                  } else {
+                    break;
+                  }
                 }
-                removedLines.pop(); // Remove the last line to ensure the total output fits within the limit
-
+                const remainingOutput = currentOutput.slice(-(maxCharacters - 3)); // Keep the last three characters as ellipsis
                 const updatedEmbed = new MessageEmbed()
                   .setTitle(`SSH session for server "${sshConfig.host}"`)
-                  .setDescription('```\n' + session.output.join('') + '```')
+                  .setDescription('```\n' + remainingOutput + '```')
                   .setColor('#007bff');
 
                 session.message.edit({ embeds: [updatedEmbed] });
