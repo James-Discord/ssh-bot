@@ -1,5 +1,6 @@
-const { Client, Intents, MessageEmbed } = require('discord.js');
+const { Client, Intents, MessageEmbed, Util } = require('discord.js');
 const { Client: SSHClient } = require('ssh2');
+const util = require('util');
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
 const prefix = '!';
@@ -131,34 +132,38 @@ client.on('messageCreate', async (message) => {
               const output = data.toString();
               session.output.push(output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, '')); // Remove escape sequences
 
-              const maxCharacters = 3000;
+              const maxChunkLength = 1999;
+              const maxCharacterLimit = 3000;
+              const splitCharacter = '\n--- Split ---\n'; // Choose a split character that won't be present in the output
 
-              if (session.output.join('').length > maxCharacters) {
-                const removedLines = [];
-                let currentOutput = session.output.join('');
-                while (currentOutput.length > maxCharacters) {
-                  const firstNewlineIndex = currentOutput.indexOf('\n');
-                  if (firstNewlineIndex !== -1) {
-                    const removedLine = currentOutput.slice(0, firstNewlineIndex + 1);
-                    removedLines.push(removedLine);
-                    currentOutput = currentOutput.slice(firstNewlineIndex + 1);
-                  } else {
-                    break;
-                  }
+              let updatedOutput = session.output.join('');
+              let removedLines = 0;
+
+              if (updatedOutput.length > maxCharacterLimit) {
+                const lines = updatedOutput.split('\n');
+                while (lines.join('\n').length > maxCharacterLimit) {
+                  lines.shift();
+                  removedLines++;
                 }
-                const remainingOutput = currentOutput.slice(-(maxCharacters - 3)); // Keep the last three characters as ellipsis
+
+                updatedOutput = lines.join('\n');
+              }
+
+              if (session.output.length > maxChunkLength || removedLines > 0) {
+                const removedLinesMessage = removedLines > 0 ? `The output exceeded the character limit. Removed ${removedLines} lines.\n` : '';
+
                 const updatedEmbed = new MessageEmbed()
                   .setTitle(`SSH session for server "${sshConfig.host}"`)
-                  .setDescription('```\n' + remainingOutput + '```')
+                  .setDescription('```\n' + removedLinesMessage + updatedOutput + '```')
                   .setColor('#007bff');
 
                 session.message.edit({ embeds: [updatedEmbed] });
 
-                dmChannel.send(`The output exceeded the character limit. Removed ${removedLines.length} lines.`);
+                session.output = [updatedOutput];
               } else {
                 const updatedEmbed = new MessageEmbed()
                   .setTitle(`SSH session for server "${sshConfig.host}"`)
-                  .setDescription('```\n' + session.output.join('') + '```')
+                  .setDescription('```\n' + updatedOutput + '```')
                   .setColor('#007bff');
 
                 session.message.edit({ embeds: [updatedEmbed] });
