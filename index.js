@@ -1,6 +1,7 @@
 const { Client, Intents, MessageEmbed, Util } = require('discord.js');
 const { Client: SSHClient } = require('ssh2');
 const util = require('util');
+const { exec } = require('child_process');
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
 const prefix = '!';
@@ -196,6 +197,44 @@ client.on('messageCreate', async (message) => {
 
       ssh.connect(sshConfig); // Connect SSH after all prompts are collected
     };
+
+  } else if (command === 'update') {
+    if (message.author.id !== 'YOUR_USER_ID') {
+      await message.reply('Sorry, only the bot owner can use this command.');
+      return;
+    }
+
+    const embed = new MessageEmbed()
+      .setTitle('Updating Bot')
+      .setDescription('Pulling changes from Git and restarting...')
+      .setColor('#ffc107');
+
+    const updatingMessage = await message.channel.send({ embeds: [embed] });
+
+    exec('git pull', async (err, stdout, stderr) => {
+      if (err) {
+        const errorEmbed = new MessageEmbed()
+          .setTitle('Update Failed')
+          .setDescription(`Failed to pull changes from Git:\n\`${err.message}\``)
+          .setColor('#dc3545');
+
+        await updatingMessage.edit({ embeds: [errorEmbed] });
+        return;
+      }
+
+      const successEmbed = new MessageEmbed()
+        .setTitle('Update Successful')
+        .setDescription('Successfully pulled changes from Git. Restarting bot...')
+        .setColor('#28a745');
+
+      await updatingMessage.edit({ embeds: [successEmbed] });
+
+      exec('pm2 restart bot', (err) => {
+        if (err) {
+          console.error('Failed to restart bot:', err);
+        }
+      });
+    });
   }
 });
 
