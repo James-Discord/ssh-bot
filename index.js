@@ -108,7 +108,7 @@ client.on('messageCreate', async (message) => {
         session.output = [];
         channel.on('data', (data) => {
           const output = data.toString();
-          session.output.push(output);
+          session.output.push(output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, '')); // Remove escape sequences
           if (session.output.length > 100) {
             session.output.shift();
           }
@@ -202,17 +202,14 @@ async function selectSSHConfig(configs, dmChannel) {
   const collected = await dmChannel.awaitMessages({ filter, max: 1, time: 60000, errors: ['time'] });
 
   const response = collected.first().content.trim();
-  const index = parseInt(response, 10);
-  if (isNaN(index) || index < 1 || index > configs.length) {
-    await dmChannel.send('Invalid selection. Please try again.');
+  const index = parseInt(response) - 1;
+  if (isNaN(index) || index < 0 || index >= configs.length) {
+    dmChannel.send('Invalid selection. Please try again.');
     return selectSSHConfig(configs, dmChannel);
   }
 
-  return configs[index - 1];
+  return configs[index];
 }
-
-async function promptSSHInputs(dmChannel) {
-  const sshConfig = {};
 
   const prompts = [
     { name: 'host', message: 'Enter the SSH host:', example: 'example.com' },
@@ -244,12 +241,13 @@ async function promptSSHInputs(dmChannel) {
   return sshConfig;
 }
 
+
 async function askToSaveInputs(userId, dmChannel) {
   const embed = new MessageEmbed()
     .setTitle('SSH Configuration')
-    .setDescription('Do you want to save these SSH configuration inputs for future use?')
+    .setDescription('Do you want to save these SSH inputs for future use?')
     .setColor('#00FF00')
-    .addField('Options', '`yes` - Save configuration inputs\n`no` - Discard configuration inputs');
+    .addField('Options', '`yes` - Save inputs\n`no` - Do not save inputs');
 
   dmChannel.send({ embeds: [embed] });
 
@@ -260,18 +258,22 @@ async function askToSaveInputs(userId, dmChannel) {
   return response === 'yes';
 }
 
-async function saveSSHConfig(userId, sshConfig) {
+async function saveSSHConfig(userId, config) {
   return new Promise((resolve, reject) => {
-    const { host, port, username, password } = sshConfig;
-    db.run('INSERT INTO ssh_configs (user_id, host, port, username, password) VALUES (?, ?, ?, ?, ?)', [userId, host, port, username, password], (err) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve();
+    db.run(
+      'INSERT INTO ssh_configs (user_id, host, port, username, password) VALUES (?, ?, ?, ?, ?)',
+      [userId, config.host, config.port, config.username, config.password],
+      (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
       }
-    });
+    );
   });
 }
+
 
 const token = 'MTExMDI3MzI5MDY1MzY3NTU1MQ.GPZBH9.Qut3sr1BKdBOyTFvXgrdjSrGQAD5QrquXe29YE';
 client.login(token);
