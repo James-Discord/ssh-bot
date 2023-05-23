@@ -132,38 +132,26 @@ client.on('messageCreate', async (message) => {
               const output = data.toString();
               session.output.push(output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, '')); // Remove escape sequences
 
-              const maxChunkLength = 1999;
-              const maxCharacterLimit = 3000;
-              const splitCharacter = '\n--- Split ---\n'; // Choose a split character that won't be present in the output
-
+              const maxCharacterLength = 3000;
               let updatedOutput = session.output.join('');
-              let removedLines = 0;
 
-              if (updatedOutput.length > maxCharacterLimit) {
-                const lines = updatedOutput.split('\n');
-                while (lines.join('\n').length > maxCharacterLimit) {
-                  lines.shift();
-                  removedLines++;
-                }
-
-                updatedOutput = lines.join('\n');
-              }
-
-              if (session.output.length > maxChunkLength || removedLines > 0) {
-                const removedLinesMessage = removedLines > 0 ? `The output exceeded the character limit. Removed ${removedLines} lines.\n` : '';
-
+              if (updatedOutput.length > maxCharacterLength) {
+                const linesToRemove = Math.ceil((updatedOutput.length - maxCharacterLength) / 3000);
+                updatedOutput = updatedOutput.slice(-maxCharacterLength);
+                const footerText = `The output exceeded the character limit. Removed ${linesToRemove} lines.`;
                 const updatedEmbed = new MessageEmbed()
                   .setTitle(`SSH session for server "${sshConfig.host}"`)
-                  .setDescription('```\n' + removedLinesMessage + updatedOutput + '```')
-                  .setColor('#007bff');
+                  .setDescription('```' + updatedOutput + '```')
+                  .setColor('#007bff')
+                  .setFooter(footerText);
 
                 session.message.edit({ embeds: [updatedEmbed] });
 
-                session.output = [updatedOutput];
+                session.output.splice(0, linesToRemove);
               } else {
                 const updatedEmbed = new MessageEmbed()
                   .setTitle(`SSH session for server "${sshConfig.host}"`)
-                  .setDescription('```\n' + updatedOutput + '```')
+                  .setDescription('```' + updatedOutput + '```')
                   .setColor('#007bff');
 
                 session.message.edit({ embeds: [updatedEmbed] });
