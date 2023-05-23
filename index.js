@@ -1,5 +1,6 @@
 const { Client, Intents, MessageEmbed, Util } = require('discord.js');
 const { Client: SSHClient } = require('ssh2');
+const fs = require('fs');
 const util = require('util');
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
@@ -133,24 +134,20 @@ client.on('messageCreate', async (message) => {
               session.output += output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, ''); // Remove escape sequences
 
               const maxChunkLength = 1999;
-              const splitCharacter = '\n--- Split ---\n'; // Choose a split character that won't be present in the output
 
               if (session.output.length > maxChunkLength) {
-                const chunks = session.output.match(new RegExp(`.{1,${maxChunkLength}}`, 'g'));
-                let updatedOutput = chunks.join(splitCharacter);
+                const filePath = `ssh_output_${Date.now()}.txt`;
+                fs.writeFileSync(filePath, session.output);
+                session.output = '';
 
-                if (session.output.length % maxChunkLength !== 0) {
-                  updatedOutput += splitCharacter + session.output.substr(chunks.length * maxChunkLength);
-                }
-
-                const updatedEmbed = new MessageEmbed()
+                const fileEmbed = new MessageEmbed()
                   .setTitle(`SSH session for server "${sshConfig.host}"`)
-                  .setDescription('```\n' + updatedOutput + '```')
+                  .setDescription('SSH output exceeds message size limit. Sending as a file.')
                   .setColor('#007bff');
 
-                session.message.channel.send({ embeds: [updatedEmbed] });
-
-                session.output = '';
+                dmChannel.send({ embeds: [fileEmbed], files: [filePath] }).then(() => {
+                  fs.unlinkSync(filePath);
+                });
               } else {
                 const updatedEmbed = new MessageEmbed()
                   .setTitle(`SSH session for server "${sshConfig.host}"`)
