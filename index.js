@@ -131,7 +131,7 @@ client.on('messageCreate', async (message) => {
                   .setDescription('Output', '```' + updatedOutput + '```')
                   .setColor('#007bff');
 
-                msg.edit({ embeds: [updatedEmbed] });
+                session.message.edit({ embeds: [updatedEmbed] });
               }
             });
         
