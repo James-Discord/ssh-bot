@@ -131,19 +131,32 @@ client.on('messageCreate', async (message) => {
               const output = data.toString();
               session.output.push(output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, '')); // Remove escape sequences
 
-              const maxChunkLength = 1999;
+              const maxCharacters = 3000;
 
-              if (session.output.length > maxChunkLength) {
-                session.output = session.output.slice(session.output.length - maxChunkLength);
+              if (session.output.join('').length > maxCharacters) {
+                const removedLines = [];
+                while (session.output.join('').length > maxCharacters) {
+                  const removedLine = session.output.shift();
+                  removedLines.push(removedLine);
+                }
+                removedLines.pop(); // Remove the last line to ensure the total output fits within the limit
+
+                const updatedEmbed = new MessageEmbed()
+                  .setTitle(`SSH session for server "${sshConfig.host}"`)
+                  .setDescription('```\n' + session.output.join('') + '```')
+                  .setColor('#007bff');
+
+                session.message.edit({ embeds: [updatedEmbed] });
+
+                dmChannel.send(`The output exceeded the character limit. Removed ${removedLines.length} lines.`);
+              } else {
+                const updatedEmbed = new MessageEmbed()
+                  .setTitle(`SSH session for server "${sshConfig.host}"`)
+                  .setDescription('```\n' + session.output.join('') + '```')
+                  .setColor('#007bff');
+
+                session.message.edit({ embeds: [updatedEmbed] });
               }
-
-              const updatedOutput = session.output.join('\n');
-              const updatedEmbed = new MessageEmbed()
-                .setTitle(`SSH session for server "${sshConfig.host}"`)
-                .setDescription('```\n' + updatedOutput + '```')
-                .setColor('#007bff');
-
-              session.message.edit({ embeds: [updatedEmbed] });
             });
 
             channel.on('close', () => {
