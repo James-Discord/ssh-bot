@@ -5,38 +5,11 @@ const util = require('util');
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
 const prefix = '!';
 
-const rateLimitDuration = 10 * 60 * 1000; // 10 minutes
-const rateLimitChunkCount = 5;
-const rateLimitDelay = 10 * 1000; // 10 seconds
-
-const activeSessions = new Map();
-
 client.on('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
 
-// Rate limiting helper functions
-const applyRateLimit = async (dmChannel) => {
-  // Delay message sending by the specified rate limit delay
-  await Util.delayFor(rateLimitDelay);
-
-  // After the delay, check if there are any additional messages in the queue
-  const queueSize = activeSessions.get(dmChannel.recipient.id)?.messageQueue?.length || 0;
-  if (queueSize > 0) {
-    // If there are more messages, process the next one
-    const nextMessage = activeSessions.get(dmChannel.recipient.id).messageQueue.shift();
-    dmChannel.send(nextMessage.content);
-  }
-};
-
-const addToRateLimitQueue = (message) => {
-  const session = activeSessions.get(message.author.id);
-  if (!session.messageQueue) {
-    session.messageQueue = [];
-  }
-
-  session.messageQueue.push(message);
-};
+const activeSessions = new Map();
 
 client.on('messageCreate', async (message) => {
   if (!message.guild) return;
@@ -125,7 +98,7 @@ client.on('messageCreate', async (message) => {
 
       const ssh = new SSHClient();
       ssh.on('ready', () => {
-        const session = { ssh, channel: null, message: null, output: '', messageQueue: [] };
+        const session = { ssh, channel: null, message: null, output: '' };
         activeSessions.set(message.author.id, session);
 
         session.channel = ssh.shell((err, channel) => {
@@ -145,20 +118,13 @@ client.on('messageCreate', async (message) => {
             session.message = sentMessage;
 
             const collector = dmChannel.createMessageCollector({ filter });
-            collector.on('collect', async (m) => {
+            collector.on('collect', (m) => {
               const content = m.content.trim();
               if (content === '❌') {
                 session.ssh.end();
                 collector.stop();
               } else {
-                addToRateLimitQueue(m);
-                const chunkedMessagesSent = session.messageQueue.length;
-
-                if (chunkedMessagesSent === rateLimitChunkCount) {
-                  // Apply rate limit and reset the chunked message counter
-                  applyRateLimit(dmChannel);
-                  session.messageQueue = [];
-                }
+                channel.write(content + '\n');
               }
             });
 
