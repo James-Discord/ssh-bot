@@ -3,7 +3,7 @@ const sqlite3 = require('sqlite3').verbose();
 const SSHClient = require('ssh2').Client;
 
 // Create a new Discord client with required intents
-const client = new Client({ intents: [Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILDS] });
+const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
 
 // Connect to the SQLite database
 const db = new sqlite3.Database('./database.db');
