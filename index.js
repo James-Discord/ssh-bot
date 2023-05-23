@@ -3,7 +3,7 @@ const { Client: SSHClient } = require('ssh2');
 const sqlite3 = require('sqlite3').verbose();
 const util = require('util');
 
-const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES] });
+const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
 const prefix = '!';
 
 // Connect to the SQLite database
