@@ -1,82 +1,53 @@
-const Discord = require('discord.js');
-const { Client, MessageEmbed } = require('discord.js');
-const { Client: SSHClient } = require('ssh2');
+const { Client, MessageEmbed, Intents } = require('discord.js');
 const sqlite3 = require('sqlite3').verbose();
+const SSHClient = require('ssh2').Client;
 
-const client = new Client();
-const prefix = '!';
+// Create a new Discord client with required intents
+const client = new Client({ intents: [Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILDS] });
 
 // Connect to the SQLite database
-const db = new sqlite3.Database('./ssh_configs.db', (err) => {
-  if (err) {
-    console.error('Failed to connect to the database:', err);
-  } else {
-    console.log('Connected to the database');
-  }
+const db = new sqlite3.Database('./database.db');
+
+// Bot ready event
+client.once('ready', () => {
+  console.log('SSH Bot is ready!');
 });
 
-// Create the SSH configs table if it doesn't exist
-db.run(`CREATE TABLE IF NOT EXISTS ssh_configs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id TEXT NOT NULL,
-  host TEXT NOT NULL,
-  port INTEGER NOT NULL,
-  username TEXT NOT NULL,
-  password TEXT NOT NULL
-)`);
-
-client.on('ready', () => {
-  console.log(`Logged in as ${client.user.tag}`);
-});
-
+// Bot message event
 client.on('messageCreate', async (message) => {
-  if (!message.guild) return;
-  if (message.author.bot) return;
-  if (!message.content.startsWith(prefix)) return;
-
-  const args = message.content.slice(prefix.length).trim().split(/ +/);
-  const command = args.shift().toLowerCase();
-
-  if (command === 'ssh') {
+  if (!message.guild) {
     const dmChannel = await message.author.createDM();
-
-    // Check if there are saved SSH configurations for the user
-    const savedConfigs = await getSavedSSHConfigs(message.author.id);
-    if (savedConfigs.length === 0) {
-      await message.reply('No saved SSH configurations found. Please enter the SSH details manually.');
-
-      const sshConfig = await enterSSHConfigManually(dmChannel);
-      if (!sshConfig) {
-        await message.reply('SSH configuration input cancelled.');
-        return;
-      }
-
-      await saveSSHConfig(message.author.id, sshConfig);
-      await message.reply('SSH configuration saved successfully!');
-    } else {
-      // Prompt the user to select a saved SSH configuration
-      const selectedConfig = await selectSSHConfig(savedConfigs, dmChannel);
-      if (!selectedConfig) {
-        await message.reply('SSH configuration selection cancelled.');
-        return;
-      }
-
-      await message.reply(`Selected SSH configuration: ${selectedConfig.host}`);
+    if (message.content.toLowerCase() === '!ssh') {
+      handleSSHCommand(dmChannel);
     }
-
-    // Connect to SSH using the selected or manually entered configuration
-    establishSSHConnection(selectedConfig || sshConfig, message.author.id, message.channel);
   }
 });
 
-client.login('MTExMDI3MzI5MDY1MzY3NTU1MQ.GPZBH9.Qut3sr1BKdBOyTFvXgrdjSrGQAD5QrquXe29YE');
+// Handle the "!ssh" command
+async function handleSSHCommand(dmChannel) {
+  const userId = dmChannel.recipient.id;
+  const savedConfigs = await getSavedSSHConfigs(userId);
 
-// Helper function to get saved SSH configurations from the database
+  if (savedConfigs.length > 0) {
+    const config = await selectSSHConfig(savedConfigs, dmChannel);
+    if (config) {
+      establishSSHConnection(config, userId, dmChannel);
+    }
+  } else {
+    const sshConfig = await enterSSHConfigManually(dmChannel);
+    if (sshConfig) {
+      saveSSHConfig(sshConfig, userId);
+      establishSSHConnection(sshConfig, userId, dmChannel);
+    }
+  }
+}
+
+// Retrieve saved SSH configurations for a user
 function getSavedSSHConfigs(userId) {
   return new Promise((resolve, reject) => {
     db.all('SELECT * FROM ssh_configs WHERE user_id = ?', userId, (err, rows) => {
       if (err) {
-        console.error('Error fetching saved SSH configurations:', err);
+        console.error('Error retrieving saved SSH configurations:', err);
         reject(err);
       } else {
         resolve(rows);
@@ -85,31 +56,19 @@ function getSavedSSHConfigs(userId) {
   });
 }
 
-// Helper function to save an SSH configuration to the database
-function saveSSHConfig(userId, sshConfig) {
-  return new Promise((resolve, reject) => {
-    const insertStatement = db.prepare(
-      'INSERT INTO ssh_configs (user_id, host, port, username, password) VALUES (?, ?, ?, ?, ?)'
-    );
-
-    insertStatement.run(
-      userId,
-      sshConfig.host,
-      sshConfig.port,
-      sshConfig.username,
-      sshConfig.password,
-      (err) => {
-        if (err) {
-          console.error('Error inserting SSH config into database:', err);
-          reject(err);
-        } else {
-          resolve();
-        }
+// Save an SSH configuration for a user
+function saveSSHConfig(sshConfig, userId) {
+  db.run(
+    'INSERT INTO ssh_configs (user_id, host, port, username, password) VALUES (?, ?, ?, ?, ?)',
+    [userId, sshConfig.host, sshConfig.port, sshConfig.username, sshConfig.password],
+    (err) => {
+      if (err) {
+        console.error('Error saving SSH configuration:', err);
+      } else {
+        console.log('SSH configuration saved successfully!');
       }
-    );
-
-    insertStatement.finalize();
-  });
+    }
+  );
 }
 
 // Helper function to prompt the user to enter the SSH configuration manually
@@ -153,19 +112,21 @@ function enterSSHConfigManually(dmChannel) {
   });
 }
 
-// Helper function to select an SSH configuration from a list
-function selectSSHConfig(configs, dmChannel) {
+// Helper function to select an SSH configuration from saved configurations
+function selectSSHConfig(savedConfigs, dmChannel) {
   return new Promise(async (resolve) => {
     const embed = new MessageEmbed()
-      .setTitle('Select SSH Configuration')
-      .setDescription('Please select the SSH configuration to use:');
+      .setTitle('Saved SSH Configurations')
+      .setDescription('Please select the SSH configuration you want to use:')
+      .setColor('#0099ff');
 
-    configs.forEach((config, index) => {
-      embed.addField(`${index + 1}. ${config.host}`, `Port: ${config.port}\nUsername: ${config.username}`);
+    savedConfigs.forEach((config, index) => {
+      embed.addField(`Configuration ${index + 1}`, `Host: ${config.host}\nPort: ${config.port}\nUsername: ${config.username}`);
     });
 
-    await dmChannel.send(embed);
-    await dmChannel.send('Enter the number corresponding to your selection (or "cancel" to cancel):');
+    embed.addField('Cancel', 'Cancel the SSH connection');
+
+    await dmChannel.send({ embeds: [embed] });
 
     const response = await waitForUserResponse(dmChannel);
     if (!response) {
@@ -174,82 +135,84 @@ function selectSSHConfig(configs, dmChannel) {
     }
 
     const selection = parseInt(response.content.trim());
-    if (isNaN(selection) || selection < 1 || selection > configs.length) {
-      await dmChannel.send('Invalid selection. SSH configuration selection cancelled.');
-      resolve(null);
+    if (!isNaN(selection) && selection >= 1 && selection <= savedConfigs.length) {
+      resolve(savedConfigs[selection - 1]);
     } else {
-      resolve(configs[selection - 1]);
+      resolve(null);
     }
   });
 }
 
-// Helper function to wait for a user response in a DM channel
+// Helper function to wait for a user response
 function waitForUserResponse(dmChannel) {
   return new Promise((resolve) => {
-    const filter = (m) => m.author.id === dmChannel.recipient.id;
-    const collector = dmChannel.createMessageCollector({ filter, max: 1, time: 60000 });
+    const collector = dmChannel.createMessageCollector({ filter: (m) => m.author.id === dmChannel.recipient.id, max: 1 });
 
     collector.on('collect', (message) => {
       resolve(message);
     });
 
-    collector.on('end', (collected) => {
-      if (collected.size === 0) {
+    collector.on('end', (collected, reason) => {
+      if (reason === 'time') {
+        dmChannel.send('No response received. The operation has been canceled.');
         resolve(null);
       }
     });
   });
 }
 
-// Helper function to establish an SSH connection
-function establishSSHConnection(sshConfig, userId, channel) {
+// Establish an SSH connection using the provided configuration
+function establishSSHConnection(sshConfig, userId, dmChannel) {
   const ssh = new SSHClient();
-  ssh.on('ready', () => {
-    channel.send('SSH connection established! You can now execute commands.');
 
-    ssh.shell((err, stream) => {
-      if (err) {
-        channel.send(`Error opening SSH shell: ${err.message}`);
+  dmChannel.send('Connecting to SSH...');
+
+  ssh.on('ready', () => {
+    dmChannel.send('SSH connection established.');
+
+    dmChannel.send('Enter a command to execute on the SSH server.');
+
+    dmChannel.send('Type "!ssh" to disconnect.');
+
+    dmChannel.awaitMessages({ filter: (m) => m.author.id === dmChannel.recipient.id, max: 1 }).then((collected) => {
+      const message = collected.first();
+
+      if (message.content.toLowerCase() === '!ssh') {
         ssh.end();
         return;
       }
 
-      channel.on('messageCreate', async (message) => {
-        if (!message.guild) return;
-        if (message.author.bot) return;
+      ssh.exec(message.content, (err, stream) => {
+        if (err) {
+          dmChannel.send(`SSH command execution error: ${err.message}`);
+          ssh.end();
+          return;
+        }
 
-        // Send user input to SSH shell
-        stream.write(`${message.content}\n`);
-
-        // Capture SSH shell output
-        let output = '';
         stream.on('data', (data) => {
-          output += data.toString();
+          dmChannel.send(data.toString());
         });
 
-        // Process SSH shell output
-        stream.on('close', async (code, signal) => {
-          const response = `SSH command executed with exit code ${code}\n\n${output}`;
-          await message.reply(response);
-          channel.send('Enter another command or type "!ssh" to disconnect.');
-
-          // Disconnect SSH on "!ssh" command
-          if (message.content.toLowerCase() === '!ssh') {
-            ssh.end();
+        stream.on('close', (code, signal) => {
+          if (code === 0) {
+            dmChannel.send('SSH command executed successfully.');
+          } else {
+            dmChannel.send(`SSH command execution failed with code ${code}.`);
           }
+          ssh.end();
         });
       });
     });
   });
 
   ssh.on('error', (err) => {
-    channel.send(`SSH connection error: ${err.message}`);
+    dmChannel.send(`SSH connection error: ${err.message}`);
     ssh.end();
   });
 
   ssh.on('end', async () => {
     await deleteSavedSSHConfigs(userId);
-    channel.send('SSH connection terminated.');
+    dmChannel.send('SSH connection terminated.');
   });
 
   ssh.connect({
@@ -273,3 +236,6 @@ function deleteSavedSSHConfigs(userId) {
     });
   });
 }
+
+// Login the bot using your bot token
+client.login('MTExMDI3MzI5MDY1MzY3NTU1MQ.GPZBH9.Qut3sr1BKdBOyTFvXgrdjSrGQAD5QrquXe29YE');
