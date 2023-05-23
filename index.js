@@ -3,7 +3,7 @@ const { Client: SSHClient } = require('ssh2');
 const util = require('util');
 const { exec } = require('child_process');
 const QuickDB = require('quick.db');
-const db = new QuickDB.Database();
+const db = new QuickDB();
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
 const prefix = '!';
