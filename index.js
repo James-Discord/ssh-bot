@@ -1,10 +1,12 @@
-const { Client, Intents, MessageEmbed, Util } = require('discord.js');
+const { Client, Intents, MessageEmbed } = require('discord.js');
 const { Client: SSHClient } = require('ssh2');
-const util = require('util');
 const { exec } = require('child_process');
+const QuickDB = require('quick.db');
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
 const prefix = '!';
+
+const db = new QuickDB();
 
 client.on('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
@@ -37,63 +39,94 @@ client.on('messageCreate', async (message) => {
     const filter = (m) => m.author.id === message.author.id;
     const collector = dmChannel.createMessageCollector({ filter, time: 60000 });
 
-    let sshConfig = {
-      host: null,
-      port: null,
-      username: null,
-      password: null,
-    };
+    const savedConfigs = db.get(`${message.author.id}.sshConfigs`) || [];
+    let sshConfig = {};
 
-    const promptMessages = [
-      'Enter the SSH host (IP or domain):',
-      'Enter the SSH port:',
-      'Enter the SSH username:',
-      'Enter the SSH password:',
-    ];
+    if (savedConfigs.length > 0) {
+      const savedEmbed = new MessageEmbed()
+        .setTitle('Saved SSH Configurations')
+        .setDescription('Choose a saved SSH configuration to connect to:')
+        .setColor('#007bff');
 
-    let promptCount = 0;
-
-    const sendPrompt = () => {
-      dmChannel.send(promptMessages[promptCount]);
-    };
-
-    sendPrompt();
-
-    collector.on('collect', (m) => {
-      const input = m.content.trim();
-
-      switch (promptCount) {
-        case 0:
-          sshConfig.host = input;
-          promptCount++;
-          sendPrompt();
-          break;
-        case 1:
-          sshConfig.port = parseInt(input, 10);
-          promptCount++;
-          sendPrompt();
-          break;
-        case 2:
-          sshConfig.username = input;
-          promptCount++;
-          sendPrompt();
-          break;
-        case 3:
-          sshConfig.password = input;
-          collector.stop();
-          connectSSH();
-          break;
+      for (let i = 0; i < savedConfigs.length; i++) {
+        const { host, port, username } = savedConfigs[i];
+        savedEmbed.addField(`${i + 1}. ${host}:${port}`, `Username: ${username}`);
       }
-    });
 
-    const connectSSH = () => {
-      if (!sshConfig.host || !sshConfig.port || !sshConfig.username || !sshConfig.password) {
-        const failedEmbed = new MessageEmbed()
-          .setTitle('SSH Connection Failed')
-          .setDescription('Please provide all the required SSH details.')
-          .setColor('#dc3545');
+      savedEmbed.addField('0. Enter SSH details manually', 'Connect using manual SSH configuration');
 
-        dmChannel.send({ embeds: [failedEmbed] });
+      dmChannel.send({ embeds: [savedEmbed] });
+
+      collector.on('collect', async (m) => {
+        const choice = parseInt(m.content.trim());
+        if (choice === 0) {
+          collector.stop();
+          await dmChannel.send('Please enter the SSH details manually:');
+          askSSHDetails();
+        } else if (choice > 0 && choice <= savedConfigs.length) {
+          collector.stop();
+          const selectedConfig = savedConfigs[choice - 1];
+          connectSSH(selectedConfig);
+        }
+      });
+    } else {
+      await dmChannel.send('You have no saved SSH configurations.');
+      askSSHDetails();
+    }
+
+    const askSSHDetails = () => {
+      let promptCount = 0;
+
+      const promptMessages = [
+        'Enter the SSH host (IP or domain):',
+        'Enter the SSH port:',
+        'Enter the SSH username:',
+        'Enter the SSH password:',
+      ];
+
+      const sendPrompt = () => {
+        dmChannel.send(promptMessages[promptCount]);
+      };
+
+      sendPrompt();
+
+      collector.on('collect', async (m) => {
+        const input = m.content.trim();
+
+        if (promptCount === 0 && input.toLowerCase() === 'cancel') {
+          collector.stop();
+          await dmChannel.send('SSH connection canceled.');
+          return;
+        }
+
+        switch (promptCount) {
+          case 0:
+            sshConfig.host = input;
+            promptCount++;
+            sendPrompt();
+            break;
+          case 1:
+            sshConfig.port = parseInt(input, 10);
+            promptCount++;
+            sendPrompt();
+            break;
+          case 2:
+            sshConfig.username = input;
+            promptCount++;
+            sendPrompt();
+            break;
+          case 3:
+            sshConfig.password = input;
+            collector.stop();
+            await connectSSH(sshConfig);
+            break;
+        }
+      });
+    };
+
+    const connectSSH = async (config) => {
+      if (!config.host || !config.port || !config.username || !config.password) {
+        await dmChannel.send('Please provide all the required SSH details.');
         return;
       }
 
@@ -111,7 +144,7 @@ client.on('messageCreate', async (message) => {
           }
 
           const embed = new MessageEmbed()
-            .setTitle(`SSH session for server "${sshConfig.host}"`)
+            .setTitle(`SSH session for server "${config.host}"`)
             .setDescription('Initializing session...')
             .setColor('#007bff');
 
@@ -141,7 +174,7 @@ client.on('messageCreate', async (message) => {
                 updatedOutput = updatedOutput.slice(-maxCharacterLength);
                 const footerText = `The output exceeded the character limit. Removed ${linesToRemove} lines.`;
                 const updatedEmbed = new MessageEmbed()
-                  .setTitle(`SSH session for server "${sshConfig.host}"`)
+                  .setTitle(`SSH session for server "${config.host}"`)
                   .setDescription('```' + updatedOutput + '```')
                   .setColor('#007bff')
                   .setFooter(footerText);
@@ -151,7 +184,7 @@ client.on('messageCreate', async (message) => {
                 session.output.splice(0, linesToRemove);
               } else {
                 const updatedEmbed = new MessageEmbed()
-                  .setTitle(`SSH session for server "${sshConfig.host}"`)
+                  .setTitle(`SSH session for server "${config.host}"`)
                   .setDescription('```' + updatedOutput + '```')
                   .setColor('#007bff');
 
@@ -161,7 +194,7 @@ client.on('messageCreate', async (message) => {
 
             channel.on('close', () => {
               const embed = new MessageEmbed()
-                .setTitle(`SSH session ended for server "${sshConfig.host}"`)
+                .setTitle(`SSH session ended for server "${config.host}"`)
                 .setDescription('SSH session closed')
                 .setColor('#dc3545');
 
@@ -173,68 +206,33 @@ client.on('messageCreate', async (message) => {
 
         // SSH connection successful confirmation
         const embed = new MessageEmbed()
-          .setTitle(`SSH session for server "${sshConfig.host}"`)
-          .setDescription('SSH connection established successfully!')
+          .setTitle(`SSH connection successful to server "${config.host}"`)
+          .setDescription('You can now send commands to the server.')
           .setColor('#28a745');
 
         dmChannel.send({ embeds: [embed] });
-      }).on('error', (err) => {
-        const failedEmbed = new MessageEmbed()
-          .setTitle('SSH Connection Failed')
-          .setDescription(`Error establishing SSH connection: ${err.message}`)
-          .setColor('#dc3545');
+      });
 
-        dmChannel.send({ embeds: [failedEmbed] });
-        ssh.end();
-      }).on('end', () => {
+      ssh.on('error', (err) => {
+        dmChannel.send(`SSH connection error: ${err.message}`);
+      });
+
+      ssh.on('end', () => {
         const embed = new MessageEmbed()
-          .setTitle('SSH Connection Closed')
-          .setDescription('SSH connection closed.')
+          .setTitle(`SSH session ended for server "${config.host}"`)
+          .setDescription('SSH session closed')
           .setColor('#dc3545');
 
         dmChannel.send({ embeds: [embed] });
+        activeSessions.delete(message.author.id);
       });
 
-      ssh.connect(sshConfig); // Connect SSH after all prompts are collected
-    };
-
-  } else if (command === 'update') {
-    if (message.author.id !== 'YOUR_USER_ID') {
-      await message.reply('Sorry, only the bot owner can use this command.');
-      return;
-    }
-
-    const embed = new MessageEmbed()
-      .setTitle('Updating Bot')
-      .setDescription('Pulling changes from Git and restarting...')
-      .setColor('#ffc107');
-
-    const updatingMessage = await message.channel.send({ embeds: [embed] });
-
-    exec('git pull', async (err, stdout, stderr) => {
-      if (err) {
-        const errorEmbed = new MessageEmbed()
-          .setTitle('Update Failed')
-          .setDescription(`Failed to pull changes from Git:\n\`${err.message}\``)
-          .setColor('#dc3545');
-
-        await updatingMessage.edit({ embeds: [errorEmbed] });
-        return;
+      try {
+        ssh.connect(config);
+      } catch (err) {
+        dmChannel.send(`Error connecting to SSH: ${err.message}`);
       }
-
-      const successEmbed = new MessageEmbed()
-        .setTitle('Update Successful')
-        .setDescription('Successfully pulled changes from Git. Restarting bot...')
-        .setColor('#28a745');
-
-      await updatingMessage.edit({ embeds: [successEmbed] });
-
-      exec('pm2 restart bot', (err) => {
-        if (err) {
-          console.error('Failed to restart bot:', err);
-        }
-      });
-    });
+    }
   }
 });
 
