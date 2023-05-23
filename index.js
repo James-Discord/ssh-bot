@@ -2,7 +2,8 @@ const { Client, Intents, MessageEmbed } = require('discord.js');
 const { Client: SSHClient } = require('ssh2');
 const util = require('util');
 const { exec } = require('child_process');
-const db = require('quick.db');
+const QuickDB = require('quick.db');
+const db = new QuickDB.Database();
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
 const prefix = '!';
