@@ -229,7 +229,7 @@ client.on('messageCreate', async (message) => {
 
       await updatingMessage.edit({ embeds: [successEmbed] });
 
-      exec('pm2 restart bot', (err) => {
+      exec('pm2 restart index', (err) => {
         if (err) {
           console.error('Failed to restart bot:', err);
         }
