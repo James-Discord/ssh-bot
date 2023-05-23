@@ -109,18 +109,32 @@ client.on('messageCreate', async (message) => {
         channel.on('data', (data) => {
           const output = data.toString();
           session.output.push(output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, '')); // Remove escape sequences
-          if (session.output.length > 100) {
-            session.output.shift();
-          }
-          session.message.then((msg) => {
-            const embed = new MessageEmbed()
+          const maxCharacterLength = 3000;
+          let updatedOutput = session.output.join('');
+                        if (updatedOutput.length > maxCharacterLength) {
+                const linesToRemove = Math.ceil((updatedOutput.length - maxCharacterLength) / 3000);
+                updatedOutput = updatedOutput.slice(-maxCharacterLength);
+                const footerText = `The output exceeded the character limit. Removed ${linesToRemove} lines.`;
+                const updatedEmbed = new MessageEmbed()
               .setTitle(`SSH session for server ${sshConfig.host}`)
-              .setDescription('You are now connected via SSH. Type your commands below.')
-              .addField('Output', '```' + session.output.join('') + '```')
-              .setColor('#00FF00');
-            msg.edit({ embeds: [embed] });
-          });
-        });
+                  .setDescription('```' + updatedOutput + '```')
+                  .setColor('#007bff')
+                  .setFooter(footerText);
+
+                session.message.edit({ embeds: [updatedEmbed] });
+
+                session.output.splice(0, linesToRemove);
+              } else {
+                const updatedEmbed = new MessageEmbed()
+                  .setTitle(`SSH session for server "${sshConfig.host}"`)
+                  .setFooter('You are now connected via SSH. Type your commands below.')
+                  .setDescription('Output', '```' + updatedOutput + '```')
+                  .setColor('#007bff');
+
+                msg.edit({ embeds: [updatedEmbed] });
+              }
+            });
+        
 
         const collector = dmChannel.createMessageCollector({ filter: (m) => !m.author.bot });
         collector.on('collect', (m) => {
