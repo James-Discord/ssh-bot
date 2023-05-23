@@ -1,36 +1,93 @@
-const { Client, Intents, MessageEmbed } = require('discord.js');
+const { Client, Intents, MessageEmbed, Util } = require('discord.js');
 const { Client: SSHClient } = require('ssh2');
-const sqlite3 = require('sqlite3').verbose();
 const util = require('util');
 const { exec } = require('child_process');
+const sqlite3 = require('sqlite3').verbose();
+
+const db = new sqlite3.Database('ssh_configs.db');
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
 const prefix = '!';
-
-// Connect to the SQLite database
-const db = new sqlite3.Database('./ssh_configs.db', (err) => {
-  if (err) {
-    console.error('Failed to connect to the database:', err);
-  } else {
-    console.log('Connected to the database');
-  }
-});
-
-// Create the SSH configs table if it doesn't exist
-db.run(`CREATE TABLE IF NOT EXISTS ssh_configs (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id TEXT NOT NULL,
-  host TEXT NOT NULL,
-  port INTEGER NOT NULL,
-  username TEXT NOT NULL,
-  password TEXT NOT NULL
-)`);
 
 client.on('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
 });
 
 const activeSessions = new Map();
+
+const askToUseSavedInputs = async (userId, channel) => {
+  const savedConfigs = await getSavedSSHConfigs(userId);
+  if (savedConfigs.length === 0) {
+    return false;
+  }
+
+  const embed = new MessageEmbed()
+    .setTitle('SSH Configurations')
+    .setDescription('Do you want to use your saved SSH inputs?')
+    .addField('Saved Configurations', savedConfigs.map((config, index) => `${index + 1}. ${config.host}`).join('\n'))
+    .addField('Enter Selection', 'Type the corresponding number to select the configuration or enter any other character to continue without saving.');
+
+  await channel.send({ embeds: [embed] });
+
+  const filter = (m) => m.author.id === message.author.id;
+  const collector = channel.createMessageCollector({ filter, time: 30000 });
+
+  return new Promise((resolve) => {
+    collector.on('collect', (m) => {
+      const input = m.content.trim();
+
+      if (/^\d+$/.test(input)) {
+        const index = parseInt(input, 10);
+        if (index >= 1 && index <= savedConfigs.length) {
+          collector.stop();
+          resolve(true);
+        }
+      } else {
+        collector.stop();
+        resolve(false);
+      }
+    });
+
+    collector.on('end', () => {
+      resolve(false);
+    });
+  });
+};
+
+const getSavedSSHConfigs = async (userId) => {
+  const allConfigs = await util.promisify(db.all).bind(db)(`SELECT * FROM ssh_configs WHERE user_id = ?`, userId);
+  return allConfigs;
+};
+
+const selectSSHConfig = async (configs, channel) => {
+  const embed = new MessageEmbed()
+    .setTitle('Select SSH Configuration')
+    .setDescription('Please select one of your saved SSH configurations by typing the corresponding number.')
+    .addField('Saved Configurations', configs.map((config, index) => `${index + 1}. ${config.host}`).join('\n'));
+
+  await channel.send({ embeds: [embed] });
+
+  const filter = (m) => m.author.id === message.author.id;
+  const collector = channel.createMessageCollector({ filter, time: 30000 });
+
+  return new Promise((resolve) => {
+    collector.on('collect', (m) => {
+      const input = m.content.trim();
+
+      if (/^\d+$/.test(input)) {
+        const index = parseInt(input, 10);
+        if (index >= 1 && index <= configs.length) {
+          collector.stop();
+          resolve(configs[index - 1]);
+        }
+      }
+    });
+
+    collector.on('end', () => {
+      resolve(null);
+    });
+  });
+};
 
 client.on('messageCreate', async (message) => {
   if (!message.guild) return;
@@ -283,8 +340,15 @@ client.on('messageCreate', async (message) => {
     };
 
     const getSavedSSHConfigs = async (userId) => {
-      const allConfigs = await util.promisify(db.all).bind(db)(`SELECT * FROM ssh_configs WHERE user_id = ?`, userId);
-      return allConfigs;
+      return new Promise((resolve, reject) => {
+        db.all(`SELECT * FROM ssh_configs WHERE user_id = ?`, userId, (err, rows) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve(rows);
+          }
+        });
+      });
     };
 
     const selectSSHConfig = async (configs, channel) => {
@@ -318,7 +382,5 @@ client.on('messageCreate', async (message) => {
     };
   }
 });
-
-
 
 client.login('MTExMDI3MzI5MDY1MzY3NTU1MQ.GPZBH9.Qut3sr1BKdBOyTFvXgrdjSrGQAD5QrquXe29YE');
