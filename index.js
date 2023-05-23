@@ -1,7 +1,5 @@
-const { Client, Intents, MessageEmbed, Util } = require('discord.js');
+const { Client, Intents, MessageEmbed } = require('discord.js');
 const { Client: SSHClient } = require('ssh2');
-const fs = require('fs');
-const util = require('util');
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
 const prefix = '!';
@@ -99,7 +97,7 @@ client.on('messageCreate', async (message) => {
 
       const ssh = new SSHClient();
       ssh.on('ready', () => {
-        const session = { ssh, channel: null, message: null, output: '' };
+        const session = { ssh, channel: null, message: null, output: [] };
         activeSessions.set(message.author.id, session);
 
         session.channel = ssh.shell((err, channel) => {
@@ -131,31 +129,21 @@ client.on('messageCreate', async (message) => {
 
             channel.on('data', (data) => {
               const output = data.toString();
-              session.output += output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, ''); // Remove escape sequences
+              session.output.push(output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, '')); // Remove escape sequences
 
               const maxChunkLength = 1999;
 
               if (session.output.length > maxChunkLength) {
-                const filePath = `ssh_output_${Date.now()}.txt`;
-                fs.writeFileSync(filePath, session.output);
-                session.output = '';
-
-                const fileEmbed = new MessageEmbed()
-                  .setTitle(`SSH session for server "${sshConfig.host}"`)
-                  .setDescription('SSH output exceeds message size limit. Sending as a file.')
-                  .setColor('#007bff');
-
-                dmChannel.send({ embeds: [fileEmbed], files: [filePath] }).then(() => {
-                  fs.unlinkSync(filePath);
-                });
-              } else {
-                const updatedEmbed = new MessageEmbed()
-                  .setTitle(`SSH session for server "${sshConfig.host}"`)
-                  .setDescription('```\n' + session.output + '```')
-                  .setColor('#007bff');
-
-                session.message.edit({ embeds: [updatedEmbed] });
+                session.output = session.output.slice(session.output.length - maxChunkLength);
               }
+
+              const updatedOutput = session.output.join('\n');
+              const updatedEmbed = new MessageEmbed()
+                .setTitle(`SSH session for server "${sshConfig.host}"`)
+                .setDescription('```\n' + updatedOutput + '```')
+                .setColor('#007bff');
+
+              session.message.edit({ embeds: [updatedEmbed] });
             });
 
             channel.on('close', () => {
@@ -198,5 +186,7 @@ client.on('messageCreate', async (message) => {
     };
   }
 });
+
+client.login('YOUR_BOT_TOKEN');
 
 client.login('MTExMDI3MzI5MDY1MzY3NTU1MQ.GPZBH9.Qut3sr1BKdBOyTFvXgrdjSrGQAD5QrquXe29YE');
