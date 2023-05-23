@@ -199,7 +199,7 @@ client.on('messageCreate', async (message) => {
     };
 
   } else if (command === 'update') {
-    if (message.author.id !== 'YOUR_USER_ID') {
+    if (message.author.id !== '824394779327594536') {
       await message.reply('Sorry, only the bot owner can use this command.');
       return;
     }
