@@ -98,79 +98,80 @@ client.on('messageCreate', async (message) => {
         }
 
         const embed = new MessageEmbed()
-          .setTitle(`SSH session for server "${sshConfig.host}"`)
-          .setDescription('Initializing session...')
-          .setColor('#007fff');
+          .setTitle(`SSH session for server ${sshConfig.host}`)
+          .setDescription('You are now connected via SSH. Type your commands below.')
+          .setColor('#00FF00');
+        dmChannel.send({ embeds: [embed] });
 
-        dmChannel.send({ embeds: [embed] }).then((sentMessage) => {
-          session.message = sentMessage;
+        session.message = dmChannel.send('Type `exit` to end the SSH session.');
 
-          channel.on('data', (data) => {
-            const output = data.toString();
-            session.output.push(output);
-            if (output.includes('\n')) {
-              const formattedOutput = session.output.join('');
-              session.output = [];
-              dmChannel.send(`\`\`\`${formattedOutput}\`\`\``);
-            }
+        session.output = [];
+        channel.on('data', (data) => {
+          const output = data.toString();
+          session.output.push(output);
+          if (session.output.length > 100) {
+            session.output.shift();
+          }
+          session.message.then((msg) => {
+            const embed = new MessageEmbed()
+              .setTitle(`SSH session for server ${sshConfig.host}`)
+              .setDescription('You are now connected via SSH. Type your commands below.')
+              .addField('Output', '```' + session.output.join('') + '```')
+              .setColor('#00FF00');
+            msg.edit({ embeds: [embed] });
           });
+        });
 
-          channel.on('close', () => {
-            dmChannel.send('SSH session closed.');
+        const collector = dmChannel.createMessageCollector({ filter: (m) => !m.author.bot });
+        collector.on('collect', (m) => {
+          const content = m.content.trim();
+          if (content.toLowerCase() === 'exit') {
             session.ssh.end();
+            collector.stop();
             activeSessions.delete(message.author.id);
-          });
+          } else {
+            channel.write(content + '\n');
+          }
+        });
 
-          channel.stderr.on('data', (data) => {
-            const output = data.toString();
-            dmChannel.send(`\`\`\`${output}\`\`\``);
-          });
+        channel.on('close', () => {
+          activeSessions.delete(message.author.id);
+          dmChannel.send('SSH session ended.');
+        });
 
-          channel.stdin.write('ls\n'); // Example command, replace with your desired commands
+        channel.on('error', (err) => {
+          activeSessions.delete(message.author.id);
+          dmChannel.send(`SSH session encountered an error: ${err.message}`);
         });
       });
     });
 
     ssh.on('error', (err) => {
-      dmChannel.send(`SSH connection error: ${err.message}`);
+      dmChannel.send(`SSH connection encountered an error: ${err.message}`);
     });
 
     ssh.on('end', () => {
-      activeSessions.delete(message.author.id);
+      dmChannel.send('SSH connection closed.');
     });
 
-    ssh.connect({
-      host: sshConfig.host,
-      port: sshConfig.port,
-      username: sshConfig.username,
-      password: sshConfig.password,
-    });
+    ssh.connect(sshConfig);
   }
 });
 
-async function askToUseSavedInputs(userId, channel) {
-  const savedConfigs = await getSavedSSHConfigs(userId);
-  if (savedConfigs.length === 0) return false;
-
+async function askToUseSavedInputs(userId, dmChannel) {
   const embed = new MessageEmbed()
     .setTitle('SSH Configuration')
-    .setDescription('Do you want to use your saved SSH inputs?')
-    .addField('Saved Configurations', formatSavedSSHConfigs(savedConfigs), false)
-    .addField('Options', 'Send ✅ to use saved inputs\nSend ❌ to enter new inputs', false)
-    .setColor('#007fff');
+    .setDescription('Do you want to use saved SSH configuration?')
+    .setColor('#00FF00')
+    .addField('Options', '`yes` - Use saved configuration\n`no` - Enter new configuration');
 
-  const message = await channel.send({ embeds: [embed] });
+  dmChannel.send({ embeds: [embed] });
 
-  const filter = (msg) => msg.author.id === channel.recipient.id && ['✅', '❌'].includes(msg.content.trim().toLowerCase());
-  const collected = await channel.awaitMessages({ filter, max: 1, time: 30000, errors: ['time'] });
+  const filter = (m) => m.author.id === userId;
+  const collected = await dmChannel.awaitMessages({ filter, max: 1, time: 60000, errors: ['time'] });
 
   const response = collected.first().content.trim().toLowerCase();
-
-  if (response === '✅') {
-    return true;
-  } else if (response === '❌') {
-    return false;
-  }
+  return response === 'yes';
 }
 
 async function getSavedSSHConfigs(userId) {
@@ -185,95 +186,90 @@ async function getSavedSSHConfigs(userId) {
   });
 }
 
-function formatSavedSSHConfigs(configs) {
-  let result = '';
+async function selectSSHConfig(configs, dmChannel) {
+  const embed = new MessageEmbed()
+    .setTitle('Saved SSH Configurations')
+    .setDescription('Select a saved SSH configuration by entering its number:')
+    .setColor('#00FF00');
+
   configs.forEach((config, index) => {
-    result += `${index + 1}. Host: ${config.host}, Port: ${config.port}, Username: ${config.username}\n`;
+    embed.addField(`Configuration ${index + 1}`, `Host: ${config.host}\nPort: ${config.port}\nUsername: ${config.username}`);
   });
-  return result || 'No saved SSH configurations found.';
-}
 
-async function selectSSHConfig(configs, channel) {
-  const embed = new MessageEmbed()
-    .setTitle('SSH Configuration')
-    .setDescription('Select the saved SSH configuration you want to use by entering the corresponding number:')
-    .addField('Saved Configurations', formatSavedSSHConfigs(configs), false)
-    .setColor('#007fff');
+  dmChannel.send({ embeds: [embed] });
 
-  const message = await channel.send({ embeds: [embed] });
+  const filter = (m) => m.author.id === dmChannel.recipient.id;
+  const collected = await dmChannel.awaitMessages({ filter, max: 1, time: 60000, errors: ['time'] });
 
-  const filter = (msg) => msg.author.id === channel.recipient.id && /^\d+$/.test(msg.content.trim());
-  const collected = await channel.awaitMessages({ filter, max: 1, time: 30000, errors: ['time'] });
-
-  const selectedIndex = parseInt(collected.first().content.trim()) - 1;
-  if (selectedIndex < 0 || selectedIndex >= configs.length) {
-    await channel.send('Invalid selection.');
-    return null;
+  const response = collected.first().content.trim();
+  const index = parseInt(response, 10);
+  if (isNaN(index) || index < 1 || index > configs.length) {
+    await dmChannel.send('Invalid selection. Please try again.');
+    return selectSSHConfig(configs, dmChannel);
   }
 
-  return configs[selectedIndex];
+  return configs[index - 1];
 }
 
-async function promptSSHInputs(channel) {
-  const embed = new MessageEmbed()
-    .setTitle('SSH Configuration')
-    .setDescription('Enter the SSH details:')
-    .addField('Host', 'Enter the hostname or IP address', false)
-    .addField('Port', 'Enter the port number', false)
-    .addField('Username', 'Enter the SSH username', false)
-    .addField('Password', 'Enter the SSH password', false)
-    .setColor('#007fff');
+async function promptSSHInputs(dmChannel) {
+  const sshConfig = {};
 
-  const message = await channel.send({ embeds: [embed] });
+  const prompts = [
+    { name: 'host', message: 'Enter the SSH host:', example: 'example.com' },
+    { name: 'port', message: 'Enter the SSH port:', example: '22' },
+    { name: 'username', message: 'Enter the SSH username:' },
+    { name: 'password', message: 'Enter the SSH password:', hidden: true },
+  ];
 
-  const filter = (msg) => msg.author.id === channel.recipient.id;
-  const collected = await channel.awaitMessages({ filter, max: 4, time: 30000, errors: ['time'] });
+  for (const prompt of prompts) {
+    const embed = new MessageEmbed()
+      .setTitle('SSH Configuration')
+      .setDescription(prompt.message)
+      .setColor('#00FF00')
+      .addField('Example', `\`${prompt.example || ''}\``);
 
-  const host = collected.get(message.id).content.trim();
-  const port = parseInt(collected.get(collected.lastKey()).content.trim());
-  const username = collected.get(collected.lastKey(-2)).content.trim();
-  const password = collected.get(collected.lastKey(-3)).content.trim();
+    dmChannel.send({ embeds: [embed] });
 
-  if (!host || !port || !username || !password) {
-    return null;
+    const filter = (m) => m.author.id === dmChannel.recipient.id;
+    const collected = await dmChannel.awaitMessages({ filter, max: 1, time: 60000, errors: ['time'] });
+
+    const response = collected.first().content.trim();
+    if (!response) {
+      return null;
+    }
+
+    sshConfig[prompt.name] = response;
   }
 
-  return { host, port, username, password };
+  return sshConfig;
 }
 
-async function askToSaveInputs(userId, channel) {
+async function askToSaveInputs(userId, dmChannel) {
   const embed = new MessageEmbed()
     .setTitle('SSH Configuration')
-    .setDescription('Do you want to save these SSH inputs for future use?')
-    .addField('Options', 'Send ✅ to save inputs\nSend ❌ to not save inputs', false)
-    .setColor('#007fff');
+    .setDescription('Do you want to save these SSH configuration inputs for future use?')
+    .setColor('#00FF00')
+    .addField('Options', '`yes` - Save configuration inputs\n`no` - Discard configuration inputs');
 
-  const message = await channel.send({ embeds: [embed] });
+  dmChannel.send({ embeds: [embed] });
 
-  const filter = (msg) => msg.author.id === channel.recipient.id && ['✅', '❌'].includes(msg.content.trim().toLowerCase());
-  const collected = await channel.awaitMessages({ filter, max: 1, time: 30000, errors: ['time'] });
+  const filter = (m) => m.author.id === userId;
+  const collected = await dmChannel.awaitMessages({ filter, max: 1, time: 60000, errors: ['time'] });
 
   const response = collected.first().content.trim().toLowerCase();
-
-  if (response === '✅') {
-    return true;
-  } else if (response === '❌') {
-    return false;
-  }
+  return response === 'yes';
 }
 
-async function saveSSHConfig(userId, config) {
+async function saveSSHConfig(userId, sshConfig) {
   return new Promise((resolve, reject) => {
-    const { host, port, username, password } = config;
-    db.run('INSERT INTO ssh_configs (user_id, host, port, username, password) VALUES (?, ?, ?, ?, ?)',
-      [userId, host, port, username, password],
-      (err) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve();
-        }
-      });
+    const { host, port, username, password } = sshConfig;
+    db.run('INSERT INTO ssh_configs (user_id, host, port, username, password) VALUES (?, ?, ?, ?, ?)', [userId, host, port, username, password], (err) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve();
+      }
+    });
   });
 }
 
