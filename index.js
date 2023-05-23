@@ -1,10 +1,30 @@
-const { Client, Intents, MessageEmbed, Util } = require('discord.js');
+const { Client, Intents, MessageEmbed } = require('discord.js');
 const { Client: SSHClient } = require('ssh2');
+const sqlite3 = require('sqlite3').verbose();
 const util = require('util');
 const { exec } = require('child_process');
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
 const prefix = '!';
+
+// Connect to the SQLite database
+const db = new sqlite3.Database('./ssh_configs.db', (err) => {
+  if (err) {
+    console.error('Failed to connect to the database:', err);
+  } else {
+    console.log('Connected to the database');
+  }
+});
+
+// Create the SSH configs table if it doesn't exist
+db.run(`CREATE TABLE IF NOT EXISTS ssh_configs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  host TEXT NOT NULL,
+  port INTEGER NOT NULL,
+  username TEXT NOT NULL,
+  password TEXT NOT NULL
+)`);
 
 client.on('ready', () => {
   console.log(`Logged in as ${client.user.tag}`);
@@ -34,8 +54,7 @@ client.on('messageCreate', async (message) => {
 
     const dmChannel = await message.author.createDM();
 
-    const filter = (m) => m.author.id === message.author.id;
-    const collector = dmChannel.createMessageCollector({ filter, time: 60000 });
+    const useSavedInputs = await askToUseSavedInputs(message.author.id, dmChannel);
 
     let sshConfig = {
       host: null,
@@ -44,47 +63,61 @@ client.on('messageCreate', async (message) => {
       password: null,
     };
 
-    const promptMessages = [
-      'Enter the SSH host (IP or domain):',
-      'Enter the SSH port:',
-      'Enter the SSH username:',
-      'Enter the SSH password:',
-    ];
-
-    let promptCount = 0;
-
-    const sendPrompt = () => {
-      dmChannel.send(promptMessages[promptCount]);
-    };
-
-    sendPrompt();
-
-    collector.on('collect', (m) => {
-      const input = m.content.trim();
-
-      switch (promptCount) {
-        case 0:
-          sshConfig.host = input;
-          promptCount++;
-          sendPrompt();
-          break;
-        case 1:
-          sshConfig.port = parseInt(input, 10);
-          promptCount++;
-          sendPrompt();
-          break;
-        case 2:
-          sshConfig.username = input;
-          promptCount++;
-          sendPrompt();
-          break;
-        case 3:
-          sshConfig.password = input;
-          collector.stop();
-          connectSSH();
-          break;
+    if (useSavedInputs) {
+      const savedConfigs = await getSavedSSHConfigs(message.author.id);
+      if (savedConfigs.length === 0) {
+        await message.reply('No saved SSH configurations found. Please enter the SSH details manually.');
+      } else {
+        const selectedConfig = await selectSSHConfig(savedConfigs, dmChannel);
+        sshConfig = selectedConfig;
       }
-    });
+    } else {
+      const filter = (m) => m.author.id === message.author.id;
+      const collector = dmChannel.createMessageCollector({ filter, time: 60000 });
+
+      const promptMessages = [
+        'Enter the SSH host (IP or domain):',
+        'Enter the SSH port:',
+        'Enter the SSH username:',
+        'Enter the SSH password:',
+      ];
+
+      let promptCount = 0;
+
+      const sendPrompt = () => {
+        dmChannel.send(promptMessages[promptCount]);
+      };
+
+      sendPrompt();
+
+      collector.on('collect', (m) => {
+        const input = m.content.trim();
+
+        switch (promptCount) {
+          case 0:
+            sshConfig.host = input;
+            promptCount++;
+            sendPrompt();
+            break;
+          case 1:
+            sshConfig.port = parseInt(input, 10);
+            promptCount++;
+            sendPrompt();
+            break;
+          case 2:
+            sshConfig.username = input;
+            promptCount++;
+            sendPrompt();
+            break;
+          case 3:
+            sshConfig.password = input;
+            collector.stop();
+            handleSSHConfig(message.author.id, sshConfig);
+            connectSSH();
+            break;
+        }
+      });
+    }
 
     const connectSSH = () => {
       if (!sshConfig.host || !sshConfig.port || !sshConfig.username || !sshConfig.password) {
@@ -178,64 +211,114 @@ client.on('messageCreate', async (message) => {
           .setColor('#28a745');
 
         dmChannel.send({ embeds: [embed] });
-      }).on('error', (err) => {
+      });
+
+      ssh.on('error', (err) => {
         const failedEmbed = new MessageEmbed()
           .setTitle('SSH Connection Failed')
-          .setDescription(`Error establishing SSH connection: ${err.message}`)
+          .setDescription(`Error: ${err.message}`)
           .setColor('#dc3545');
 
         dmChannel.send({ embeds: [failedEmbed] });
-        ssh.end();
-      }).on('end', () => {
-        const embed = new MessageEmbed()
-          .setTitle('SSH Connection Closed')
-          .setDescription('SSH connection closed.')
-          .setColor('#dc3545');
-
-        dmChannel.send({ embeds: [embed] });
       });
 
-      ssh.connect(sshConfig); // Connect SSH after all prompts are collected
+      ssh.connect({
+        host: sshConfig.host,
+        port: sshConfig.port,
+        username: sshConfig.username,
+        password: sshConfig.password,
+      });
     };
 
-  } else if (command === 'update') {
-    if (message.author.id !== 'YOUR_USER_ID') {
-      await message.reply('Sorry, only the bot owner can use this command.');
-      return;
-    }
+    const handleSSHConfig = (userId, sshConfig) => {
+      const insertStatement = db.prepare(`INSERT INTO ssh_configs (user_id, host, port, username, password)
+        VALUES (?, ?, ?, ?, ?)`);
 
-    const embed = new MessageEmbed()
-      .setTitle('Updating Bot')
-      .setDescription('Pulling changes from Git and restarting...')
-      .setColor('#ffc107');
-
-    const updatingMessage = await message.channel.send({ embeds: [embed] });
-
-    exec('git pull', async (err, stdout, stderr) => {
-      if (err) {
-        const errorEmbed = new MessageEmbed()
-          .setTitle('Update Failed')
-          .setDescription(`Failed to pull changes from Git:\n\`${err.message}\``)
-          .setColor('#dc3545');
-
-        await updatingMessage.edit({ embeds: [errorEmbed] });
-        return;
-      }
-
-      const successEmbed = new MessageEmbed()
-        .setTitle('Update Successful')
-        .setDescription('Successfully pulled changes from Git. Restarting bot...')
-        .setColor('#28a745');
-
-      await updatingMessage.edit({ embeds: [successEmbed] });
-
-      exec('pm2 restart bot', (err) => {
+      insertStatement.run(userId, sshConfig.host, sshConfig.port, sshConfig.username, sshConfig.password, (err) => {
         if (err) {
-          console.error('Failed to restart bot:', err);
+          console.error('Error inserting SSH config into database:', err);
         }
       });
-    });
+
+      insertStatement.finalize();
+    };
+
+    const askToUseSavedInputs = async (userId, channel) => {
+      const savedConfigs = await getSavedSSHConfigs(userId);
+      if (savedConfigs.length === 0) {
+        return false;
+      }
+
+      const embed = new MessageEmbed()
+        .setTitle('SSH Configurations')
+        .setDescription('Do you want to use your saved SSH inputs?')
+        .addField('Saved Configurations', savedConfigs.map((config, index) => `${index + 1}. ${config.host}`).join('\n'))
+        .addField('Enter Selection', 'Type the corresponding number to select the configuration or enter any other character to continue without saving.');
+
+      await channel.send({ embeds: [embed] });
+
+      const filter = (m) => m.author.id === message.author.id;
+      const collector = channel.createMessageCollector({ filter, time: 30000 });
+
+      return new Promise((resolve) => {
+        collector.on('collect', (m) => {
+          const input = m.content.trim();
+
+          if (/^\d+$/.test(input)) {
+            const index = parseInt(input, 10);
+            if (index >= 1 && index <= savedConfigs.length) {
+              collector.stop();
+              resolve(true);
+            }
+          } else {
+            collector.stop();
+            resolve(false);
+          }
+        });
+
+        collector.on('end', () => {
+          resolve(false);
+        });
+      });
+    };
+
+    const getSavedSSHConfigs = async (userId) => {
+      const allConfigs = await util.promisify(db.all).bind(db)(`SELECT * FROM ssh_configs WHERE user_id = ?`, userId);
+      return allConfigs;
+    };
+
+    const selectSSHConfig = async (configs, channel) => {
+      const embed = new MessageEmbed()
+        .setTitle('Select SSH Configuration')
+        .setDescription('Please select one of your saved SSH configurations by typing the corresponding number.')
+        .addField('Saved Configurations', configs.map((config, index) => `${index + 1}. ${config.host}`).join('\n'));
+
+      await channel.send({ embeds: [embed] });
+
+      const filter = (m) => m.author.id === message.author.id;
+      const collector = channel.createMessageCollector({ filter, time: 30000 });
+
+      return new Promise((resolve) => {
+        collector.on('collect', (m) => {
+          const input = m.content.trim();
+
+          if (/^\d+$/.test(input)) {
+            const index = parseInt(input, 10);
+            if (index >= 1 && index <= configs.length) {
+              collector.stop();
+              resolve(configs[index - 1]);
+            }
+          }
+        });
+
+        collector.on('end', () => {
+          resolve(null);
+        });
+      });
+    };
   }
 });
+
+
 
 client.login('MTExMDI3MzI5MDY1MzY3NTU1MQ.GPZBH9.Qut3sr1BKdBOyTFvXgrdjSrGQAD5QrquXe29YE');
