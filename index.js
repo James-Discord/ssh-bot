@@ -121,8 +121,8 @@ client.on('messageCreate', async (message) => {
             }
             const embed = new MessageEmbed()
               .setTitle(`SSH session for server ${sshConfig.host}`)
-              .setDescription('You are now connected via SSH. Type your commands below.')
-              .addField('Output', '```' + session.output.join('') + '```')
+              .setFooter('You are now connected via SSH. Type your commands below.')
+              .setDescription('Output', '```' + session.output.join('') + '```')
               .setColor('#00FF00');
             msg.edit({ embeds: [embed] });
           });
