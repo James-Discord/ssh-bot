@@ -89,6 +89,7 @@ client.on('messageCreate', async (message) => {
       .setFooter(`Requested by ${message.author.tag}`, message.author.avatarURL());
 
     await message.reply({ embeds: [botInfoEmbed] });
+    });
   }
     
   } else if (command === 'ssh') {
