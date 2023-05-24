@@ -123,7 +123,7 @@ client.on('messageCreate', async (message) => {
                   .setColor('#00FF00')
                   .setFooter(footerText);
 
-                session.message.edit({ embeds: [embed] });
+                msg.edit({ embeds: [embed] });
 
                 session.output.splice(0, linesToRemove);
               } else {
@@ -132,7 +132,7 @@ client.on('messageCreate', async (message) => {
                   .setDescription('```' + updatedOutput + '```')
                   .setColor('#00FF00');
 
-                session.message.edit({ embeds: [embed] });
+                msg.edit({ embeds: [embed] });
               }
             });
 
