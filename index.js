@@ -91,7 +91,6 @@ client.on('messageCreate', async (message) => {
   await message.reply({ embeds: [botInfoEmbed] });
   
 } else if (command === 'ssh-delete') {
-  // Check the database for SSH configs of the user
   const userId = message.author.id;
   db.all('SELECT * FROM ssh_configs WHERE user_id = ?', [userId], async (err, rows) => {
     if (err) {
@@ -100,113 +99,65 @@ client.on('messageCreate', async (message) => {
     }
 
     if (rows.length === 0) {
-      const noConfigsEmbed = new MessageEmbed()
-        .setColor('#FF0000')
-        .setTitle('No SSH Configurations')
-        .setDescription('You have no saved SSH configurations.');
-
-      await message.author.send({ embeds: [noConfigsEmbed] });
+      await message.author.send('You have no saved SSH configurations.');
       return;
     }
 
-    // Create an embed to display the SSH configs
-    const configListEmbed = new MessageEmbed()
-      .setColor('#00FF00')
-      .setTitle('Saved SSH Configurations')
-      .setDescription('Please select the configuration you want to delete:');
+    const configList = rows.map((row, index) => `${index + 1}. Host: ${row.host || '-'}, Port: ${row.port || '-'}, Username: ${row.username || '-'}`);
+    const configListMessage = `Saved SSH Configurations:\n${configList.join('\n')}\n\nPlease enter the number of the configuration you want to delete:`;
 
-    rows.forEach((row, index) => {
-      const host = row.host || '-';
-      const port = row.port || '-';
-      const username = row.username || '-';
-      const description = `**Configuration ${index + 1}**\nHost: ${host}\nPort: ${port}\nUsername: ${username}\n`;
-      configListEmbed.setDescription(configListEmbed.description + description);
-    });
+    await message.author.send(configListMessage);
 
-    const dmChannel = await message.author.createDM();
-    await dmChannel.send({ embeds: [configListEmbed] });
-
-    // Wait for user input
     const filter = (response) => response.author.id === message.author.id;
-    const collector = dmChannel.createMessageCollector({ filter, max: 1, time: 30000 });
+    const collector = message.author.dmChannel.createMessageCollector({ filter, max: 1, time: 30000 });
 
     collector.on('collect', async (response) => {
       const input = response.content.trim();
       const configIndex = parseInt(input, 10);
 
       if (isNaN(configIndex) || configIndex <= 0 || configIndex > rows.length) {
-        const invalidInputEmbed = new MessageEmbed()
-          .setColor('#FF0000')
-          .setTitle('Invalid Input')
-          .setDescription('Please enter a valid number from the list.');
-
-        await dmChannel.send({ embeds: [invalidInputEmbed] });
+        await message.author.send('Invalid input. Please enter a valid number from the list.');
         return;
       }
 
       const selectedConfig = rows[configIndex - 1];
-      const confirmationEmbed = new MessageEmbed()
-        .setColor('#FFA500')
-        .setTitle('Confirmation')
-        .setDescription('Are you sure you want to delete the following SSH configuration?\n')
-        .addField('Host', selectedConfig.host || '-')
-        .addField('Port', selectedConfig.port || '-')
-        .addField('Username', selectedConfig.username || '-')
-        .addField('Password', selectedConfig.password || '-')
-        .setFooter('Please type "confirm" to proceed.');
 
-      await dmChannel.send({ embeds: [confirmationEmbed] });
+      await message.author.send(`Are you sure you want to delete the following SSH configuration?\n\nHost: ${selectedConfig.host || '-'}, Port: ${selectedConfig.port || '-'}, Username: ${selectedConfig.username || '-'}, Password: ${selectedConfig.password || '-'}`);
+      await message.author.send('Please type "confirm" to proceed.');
 
-      collector.on('end', async (collected) => {
-        if (collected.size === 0) {
-          const deletionCancelledEmbed = new MessageEmbed()
-            .setColor('#FF0000')
-            .setTitle('Deletion Cancelled')
-            .setDescription('No confirmation received. Aborting deletion.');
+      const confirmationCollector = message.author.dmChannel.createMessageCollector({ filter, max: 1, time: 30000 });
 
-          await dmChannel.send({ embeds: [deletionCancelledEmbed] });
-          return;
-        }
+      confirmationCollector.on('collect', async (response) => {
+        const confirmation = response.content.trim().toLowerCase();
 
-        const confirmation = collected.first().content.trim().toLowerCase();
         if (confirmation === 'confirm') {
-          // Perform deletion
           db.run('DELETE FROM ssh_configs WHERE id = ?', [selectedConfig.id], (deleteErr) => {
             if (deleteErr) {
               console.error('Failed to delete SSH config:', deleteErr);
               return;
             }
-            const deletionSuccessEmbed = new MessageEmbed()
-              .setColor('#00FF00')
-              .setTitle('Deletion Successful')
-              .setDescription('SSH configuration deleted successfully.');
-
-            dmChannel.send({ embeds: [deletionSuccessEmbed] });
+            message.author.send('SSH configuration deleted successfully.');
           });
         } else {
-          const deletionCancelledEmbed = new MessageEmbed()
-            .setColor('#FF0000')
-            .setTitle('Deletion Cancelled')
-            .setDescription('Deletion cancelled.');
+          message.author.send('Deletion cancelled.');
+        }
+      });
 
-          dmChannel.send({ embeds: [deletionCancelledEmbed] });
+      confirmationCollector.on('end', (collected) => {
+        if (collected.size === 0) {
+          message.author.send('No confirmation received. Aborting deletion.');
         }
       });
     });
 
-    collector.on('end', async (collected) => {
+    collector.on('end', (collected) => {
       if (collected.size === 0) {
-        const deletionCancelledEmbed = new MessageEmbed()
-          .setColor('#FF0000')
-          .setTitle('Deletion Cancelled')
-          .setDescription('No input received. Aborting deletion.');
-
-        dmChannel.send({ embeds: [deletionCancelledEmbed] });
+        message.author.send('No input received. Aborting deletion.');
       }
     });
   });
-  
-    } else if (command === 'ssh') {
+
+} else if (command === 'ssh') {
     const existingSession = activeSessions.get(message.author.id);
 
     if (existingSession) {
