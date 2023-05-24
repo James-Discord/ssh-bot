@@ -103,29 +103,45 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    const configList = rows.map((row, index) => `${index + 1}. Host: ${row.host || '-'}, Port: ${row.port || '-'}, Username: ${row.username || '-'}`);
-    const configListMessage = `Saved SSH Configurations:\n${configList.join('\n')}\n\nPlease enter the number of the configuration you want to delete:`;
+    const configListEmbed = new MessageEmbed()
+      .setColor('#00FF00')
+      .setTitle('Saved SSH Configurations')
+      .setDescription('Please select the configuration you want to delete:');
 
-    await message.author.send(configListMessage);
+    rows.forEach((row, index) => {
+      const host = row.host || '-';
+      const port = row.port || '-';
+      const username = row.username || '-';
+      const configDescription = `**Configuration ${index + 1}**\nHost: ${host}\nPort: ${port}\nUsername: ${username}\n`;
+      configListEmbed.addField('\u200B', configDescription);
+    });
+
+    const dmChannel = await message.author.createDM();
+    await dmChannel.send({ embeds: [configListEmbed] });
 
     const filter = (response) => response.author.id === message.author.id;
-    const collector = message.author.dmChannel.createMessageCollector({ filter, max: 1, time: 30000 });
+    const collector = dmChannel.createMessageCollector({ filter, max: 1, time: 30000 });
 
     collector.on('collect', async (response) => {
       const input = response.content.trim();
       const configIndex = parseInt(input, 10);
 
       if (isNaN(configIndex) || configIndex <= 0 || configIndex > rows.length) {
-        await message.author.send('Invalid input. Please enter a valid number from the list.');
+        await dmChannel.send('Invalid input. Please enter a valid number from the list.');
         return;
       }
 
       const selectedConfig = rows[configIndex - 1];
 
-      await message.author.send(`Are you sure you want to delete the following SSH configuration?\n\nHost: ${selectedConfig.host || '-'}, Port: ${selectedConfig.port || '-'}, Username: ${selectedConfig.username || '-'}, Password: ${selectedConfig.password || '-'}`);
-      await message.author.send('Please type "confirm" to proceed.');
+      const confirmationEmbed = new MessageEmbed()
+        .setColor('#FFA500')
+        .setTitle('Confirmation')
+        .setDescription(`Are you sure you want to delete the following SSH configuration?\nHost: ${selectedConfig.host || '-'}\nPort: ${selectedConfig.port || '-'}\nUsername: ${selectedConfig.username || '-'}\nPassword: ${selectedConfig.password || '-'}`)
+        .setFooter('Please type "confirm" to proceed.');
 
-      const confirmationCollector = message.author.dmChannel.createMessageCollector({ filter, max: 1, time: 30000 });
+      await dmChannel.send({ embeds: [confirmationEmbed] });
+
+      const confirmationCollector = dmChannel.createMessageCollector({ filter, max: 1, time: 30000 });
 
       confirmationCollector.on('collect', async (response) => {
         const confirmation = response.content.trim().toLowerCase();
@@ -136,23 +152,23 @@ client.on('messageCreate', async (message) => {
               console.error('Failed to delete SSH config:', deleteErr);
               return;
             }
-            message.author.send('SSH configuration deleted successfully.');
+            dmChannel.send('SSH configuration deleted successfully.');
           });
         } else {
-          message.author.send('Deletion cancelled.');
+          dmChannel.send('Deletion cancelled.');
         }
       });
 
       confirmationCollector.on('end', (collected) => {
         if (collected.size === 0) {
-          message.author.send('No confirmation received. Aborting deletion.');
+          dmChannel.send('No confirmation received. Aborting deletion.');
         }
       });
     });
 
     collector.on('end', (collected) => {
       if (collected.size === 0) {
-        message.author.send('No input received. Aborting deletion.');
+        dmChannel.send('No input received. Aborting deletion.');
       }
     });
   });
@@ -179,7 +195,7 @@ client.on('messageCreate', async (message) => {
     if (useSavedInputs) {
       const savedConfigs = await getSavedSSHConfigs(message.author.id);
       if (savedConfigs.length === 0) {
-        await dmChannel.send('No saved SSH configurations found. Please enter the SSH details manually and rerun the bot!');
+        await dmChannel.send('No saved SSH configurations found. Please enter the SSH details manually and rerun the command!');
       } else {
         const selectedConfig = await selectSSHConfig(savedConfigs, dmChannel);
         sshConfig = selectedConfig;
