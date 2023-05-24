@@ -47,7 +47,7 @@ client.on('messageCreate', async (message) => {
     sent.edit(`Pong! Latency: ${ping}ms, API Latency: ${client.ws.ping}ms`);
   } else if (command === 'hello') {
     await message.reply('Hello, world!');
-    tinfo') {
+    } else if (command === 'botinfo') {
     const uptime = formatUptime(client.uptime);
     const memoryUsage = formatMemoryUsage(process.memoryUsage().heapUsed);
     const botInfoEmbed = new MessageEmbed()
@@ -83,6 +83,7 @@ function formatMemoryUsage(bytes) {
   if (i === 0) return `${bytes} ${sizes[i]}`;
   return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
 }
+
   } else if (command === 'ssh') {
     const existingSession = activeSessions.get(message.author.id);
 
