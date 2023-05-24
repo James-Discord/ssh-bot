@@ -2,6 +2,28 @@ const { Client, Intents, MessageEmbed } = require('discord.js');
 const { Client: SSHClient } = require('ssh2');
 const sqlite3 = require('sqlite3').verbose();
 const util = require('util');
+const os = require('os');
+
+function formatUptime(uptime) {
+  const totalSeconds = Math.floor(uptime / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor(((totalSeconds % 86400) % 3600) / 60);
+  const seconds = Math.floor(((totalSeconds % 86400) % 3600) % 60);
+
+  return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+}
+
+// Utility function to format memory usage
+function formatMemoryUsage(bytes) {
+  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  if (bytes === 0) return '0 Bytes';
+  const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
+  if (i === 0) return `${bytes} ${sizes[i]}`;
+  return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
+}
+
+
 
 const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.DIRECT_MESSAGES, Intents.FLAGS.GUILD_MESSAGES] });
 const prefix = '!';
@@ -47,7 +69,7 @@ client.on('messageCreate', async (message) => {
     sent.edit(`Pong! Latency: ${ping}ms, API Latency: ${client.ws.ping}ms`);
   } else if (command === 'hello') {
     await message.reply('Hello, world!');
-    } else if (command === 'botinfo') {
+  } else if (command === 'botinfo') {
     const uptime = formatUptime(client.uptime);
     const memoryUsage = formatMemoryUsage(process.memoryUsage().heapUsed);
     const botInfoEmbed = new MessageEmbed()
@@ -63,27 +85,7 @@ client.on('messageCreate', async (message) => {
       .setFooter(client.user.tag, client.user.avatarURL());
 
     await message.reply({ embeds: [botInfoEmbed] });
-  }
-});
-
-function formatUptime(uptime) {
-  const totalSeconds = Math.floor(uptime / 1000);
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor(((totalSeconds % 86400) % 3600) / 60);
-  const seconds = Math.floor(((totalSeconds % 86400) % 3600) % 60);
-
-  return `${days}d ${hours}h ${minutes}m ${seconds}s`;
-}
-
-function formatMemoryUsage(bytes) {
-  const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-  if (bytes === 0) return '0 Bytes';
-  const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
-  if (i === 0) return `${bytes} ${sizes[i]}`;
-  return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
-}
-
+    
   } else if (command === 'ssh') {
     const existingSession = activeSessions.get(message.author.id);
 
