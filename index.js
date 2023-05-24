@@ -75,16 +75,21 @@ client.on('messageCreate', async (message) => {
     const botInfoEmbed = new MessageEmbed()
       .setColor('#00FF00')
       .setTitle('Bot Information')
-      .addField('Ping', `${client.ws.ping}ms`, true)
-      .addField('Uptime', uptime, true)
-      .addField('Memory Usage', memoryUsage, true)
-      .addField('Operating System', os.platform(), true)
-      .addField('Node.js Version', process.version, true)
-      .addField('Discord.js Version', require('discord.js').version, true)
+      .setDescription('Here is some information about the bot:')
+      .addFields(
+        { name: 'Ping', value: `${client.ws.ping}ms`, inline: true },
+        { name: 'Uptime', value: uptime, inline: true },
+        { name: 'Memory Usage', value: memoryUsage, inline: true },
+        { name: '\u200B', value: '\u200B' }, // Empty field for spacing
+        { name: 'Operating System', value: os.platform(), inline: true },
+        { name: 'Node.js Version', value: process.version, inline: true },
+        { name: 'Discord.js Version', value: require('discord.js').version, inline: true }
+      )
       .setTimestamp()
-      .setFooter(client.user.tag, client.user.avatarURL());
+      .setFooter(`Requested by ${message.author.tag}`, message.author.avatarURL());
 
     await message.reply({ embeds: [botInfoEmbed] });
+  }
     
   } else if (command === 'ssh') {
     const existingSession = activeSessions.get(message.author.id);
