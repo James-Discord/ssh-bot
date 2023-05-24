@@ -90,7 +90,7 @@ client.on('messageCreate', async (message) => {
 
   await message.reply({ embeds: [botInfoEmbed] });
   
-  } else if (command === 'ssh-delete') {
+} else if (command === 'ssh-delete') {
   // Check the database for SSH configs of the user
   const userId = message.author.id;
   db.all('SELECT * FROM ssh_configs WHERE user_id = ?', [userId], async (err, rows) => {
@@ -100,35 +100,67 @@ client.on('messageCreate', async (message) => {
     }
 
     if (rows.length === 0) {
-      await message.reply('You have no saved SSH configurations.');
+      const noConfigsEmbed = new MessageEmbed()
+        .setColor('#FF0000')
+        .setTitle('No SSH Configurations')
+        .setDescription('You have no saved SSH configurations.');
+
+      await message.author.send({ embeds: [noConfigsEmbed] });
       return;
     }
 
-    // Prompt the user with their SSH configs
-    const configList = rows.map((row, index) => `${index + 1}. Host: ${row.host}, Port: ${row.port}, Username: ${row.username}`);
-    const configMessage = `Your saved SSH configurations:\n${configList.join('\n')}\n\nPlease enter the number of the configuration you want to delete.`;
-    await message.reply(configMessage);
+    // Create an embed to display the SSH configs
+    const configListEmbed = new MessageEmbed()
+      .setColor('#00FF00')
+      .setTitle('Saved SSH Configurations')
+      .setDescription('Please select the configuration you want to delete:');
+
+    rows.forEach((row, index) => {
+      configListEmbed.addField(`Configuration ${index + 1}`, `Host: ${row.host}\nPort: ${row.port}\nUsername: ${row.username}`);
+    });
+
+    const dmChannel = await message.author.createDM();
+    await dmChannel.send({ embeds: [configListEmbed] });
 
     // Wait for user input
     const filter = (response) => response.author.id === message.author.id;
-    const collector = message.channel.createMessageCollector({ filter, max: 1, time: 30000 });
+    const collector = dmChannel.createMessageCollector({ filter, max: 1, time: 30000 });
 
     collector.on('collect', async (response) => {
       const input = response.content.trim();
       const configIndex = parseInt(input, 10);
 
       if (isNaN(configIndex) || configIndex <= 0 || configIndex > rows.length) {
-        await message.reply('Invalid input. Please enter a valid number from the list.');
+        const invalidInputEmbed = new MessageEmbed()
+          .setColor('#FF0000')
+          .setTitle('Invalid Input')
+          .setDescription('Please enter a valid number from the list.');
+
+        await dmChannel.send({ embeds: [invalidInputEmbed] });
         return;
       }
 
       const selectedConfig = rows[configIndex - 1];
-      const confirmationMessage = `Are you sure you want to delete the SSH configuration:\nHost: ${selectedConfig.host}, Port: ${selectedConfig.port}, Username: ${selectedConfig.username}\n\nPlease type **confirm** to proceed.`;
-      await message.reply(confirmationMessage);
+      const confirmationEmbed = new MessageEmbed()
+        .setColor('#FFA500')
+        .setTitle('Confirmation')
+        .setDescription('Are you sure you want to delete the following SSH configuration?')
+        .addField('Host', selectedConfig.host)
+        .addField('Port', selectedConfig.port)
+        .addField('Username', selectedConfig.username)
+        .addField('Password', selectedConfig.password)
+        .setFooter('Please type "confirm" to proceed.');
+
+      await dmChannel.send({ embeds: [confirmationEmbed] });
 
       collector.on('end', async (collected) => {
         if (collected.size === 0) {
-          await message.reply('No confirmation received. Aborting deletion.');
+          const deletionCancelledEmbed = new MessageEmbed()
+            .setColor('#FF0000')
+            .setTitle('Deletion Cancelled')
+            .setDescription('No confirmation received. Aborting deletion.');
+
+          await dmChannel.send({ embeds: [deletionCancelledEmbed] });
           return;
         }
 
@@ -140,22 +172,37 @@ client.on('messageCreate', async (message) => {
               console.error('Failed to delete SSH config:', deleteErr);
               return;
             }
-            message.reply('SSH configuration deleted successfully.');
+            const deletionSuccessEmbed = new MessageEmbed()
+              .setColor('#00FF00')
+              .setTitle('Deletion Successful')
+              .setDescription('SSH configuration deleted successfully.');
+
+            dmChannel.send({ embeds: [deletionSuccessEmbed] });
           });
         } else {
-          await message.reply('Deletion cancelled.');
+          const deletionCancelledEmbed = new MessageEmbed()
+            .setColor('#FF0000')
+            .setTitle('Deletion Cancelled')
+            .setDescription('Deletion cancelled.');
+
+          dmChannel.send({ embeds: [deletionCancelledEmbed] });
         }
       });
     });
 
     collector.on('end', async (collected) => {
       if (collected.size === 0) {
-        await message.reply('No input received. Aborting deletion.');
+        const deletionCancelledEmbed = new MessageEmbed()
+          .setColor('#FF0000')
+          .setTitle('Deletion Cancelled')
+          .setDescription('No input received. Aborting deletion.');
+
+        dmChannel.send({ embeds: [deletionCancelledEmbed] });
       }
     });
   });
-    
-  } else if (command === 'ssh') {
+  
+    } else if (command === 'ssh') {
     const existingSession = activeSessions.get(message.author.id);
 
     if (existingSession) {
