@@ -107,6 +107,7 @@ client.on('messageCreate', async (message) => {
 
         session.output = [];
         channel.on('data', (data) => {
+              const output = data.toString();
               session.output.push(output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, '')); // Remove escape sequences
 
               const maxCharacterLength = 3000;
