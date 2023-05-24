@@ -179,7 +179,7 @@ client.on('messageCreate', async (message) => {
     if (useSavedInputs) {
       const savedConfigs = await getSavedSSHConfigs(message.author.id);
       if (savedConfigs.length === 0) {
-        await dmChannel.send('No saved SSH configurations found. Please enter the SSH details manually.');
+        await dmChannel.send('No saved SSH configurations found. Please enter the SSH details manually and rerun the bot!');
       } else {
         const selectedConfig = await selectSSHConfig(savedConfigs, dmChannel);
         sshConfig = selectedConfig;
