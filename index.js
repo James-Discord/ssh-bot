@@ -69,29 +69,27 @@ client.on('messageCreate', async (message) => {
     sent.edit(`Pong! Latency: ${ping}ms, API Latency: ${client.ws.ping}ms`);
   } else if (command === 'hello') {
     await message.reply('Hello, world!');
-  } else if (command === 'botinfo') {
-    const uptime = formatUptime(client.uptime);
-    const memoryUsage = formatMemoryUsage(process.memoryUsage().heapUsed);
-    const botInfoEmbed = new MessageEmbed()
-      .setColor('#00FF00')
-      .setTitle('Bot Information')
-      .setDescription('Here is some information about the bot:')
-      .addFields(
-        { name: 'Ping', value: `${client.ws.ping}ms`, inline: true },
-        { name: 'Uptime', value: uptime, inline: true },
-        { name: 'Memory Usage', value: memoryUsage, inline: true },
-        { name: '\u200B', value: '\u200B' }, // Empty field for spacing
-        { name: 'Operating System', value: os.platform(), inline: true },
-        { name: 'Node.js Version', value: process.version, inline: true },
-        { name: 'Discord.js Version', value: require('discord.js').version, inline: true }
-      )
-      .setTimestamp()
-      .setFooter(`Requested by ${message.author.tag}`, message.author.avatarURL());
+} else if (command === 'botinfo') {
+  const uptime = formatUptime(client.uptime);
+  const memoryUsage = formatMemoryUsage(process.memoryUsage().heapUsed);
+  const botInfoEmbed = new MessageEmbed()
+    .setColor('#00FF00')
+    .setTitle('Bot Information')
+    .setDescription('Here is some information about the bot:')
+    .addFields(
+      { name: 'Ping', value: `${client.ws.ping}ms`, inline: true },
+      { name: 'Uptime', value: uptime, inline: true },
+      { name: 'Memory Usage', value: memoryUsage, inline: true },
+      { name: '\u200B', value: '\u200B' }, // Empty field for spacing
+      { name: 'Operating System', value: os.platform(), inline: true },
+      { name: 'Node.js Version', value: process.version, inline: true },
+      { name: 'Discord.js Version', value: require('discord.js').version, inline: true }
+    )
+    .setTimestamp()
+    .setFooter(`Requested by ${message.author.tag}`, message.author.avatarURL());
 
-    await message.reply({ embeds: [botInfoEmbed] });
-    });
-  }
-    
+  await message.reply({ embeds: [botInfoEmbed] });
+
   } else if (command === 'ssh') {
     const existingSession = activeSessions.get(message.author.id);
 
