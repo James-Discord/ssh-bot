@@ -87,11 +87,8 @@ client.on('messageCreate', async (message) => {
     )
     .setTimestamp()
     .setFooter(`Requested by ${message.author.tag}`, message.author.avatarURL());
-  
+
   await message.reply({ embeds: [botInfoEmbed] });
-  
-  
-  
 
   } else if (command === 'ssh') {
     const existingSession = activeSessions.get(message.author.id);
@@ -343,26 +340,7 @@ async function saveSSHConfig(userId, config) {
       }
     );
   });
-
-} else if (command === 'ssh-delete') {
-    const savedConfigs = await getSavedSSHConfigs(message.author.id);
-
-    if (savedConfigs.length === 0) {
-      await message.author.send('No saved SSH configurations found.');
-      return;
-    }
-
-    const selectedConfig = await selectSSHConfig(savedConfigs, message.author);
-    const confirmation = await askToDeleteSSHConfig(message.author);
-
-    if (confirmation) {
-      await deleteSSHConfig(selectedConfig.id);
-      await message.author.send('SSH configuration deleted successfully!');
-    } else {
-      await message.author.send('Deletion canceled.');
-    }
-  }
-});
+}
 
 
 const token = 'MTExMDI3MzI5MDY1MzY3NTU1MQ.GPZBH9.Qut3sr1BKdBOyTFvXgrdjSrGQAD5QrquXe29YE';
