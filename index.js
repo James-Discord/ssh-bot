@@ -107,26 +107,33 @@ client.on('messageCreate', async (message) => {
 
         session.output = [];
         channel.on('data', (data) => {
-          const output = data.toString();
-          session.output.push(output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, '')); // Remove escape sequences
-          if (session.output.length > 100) {
-            session.output.shift();
-          }
-          session.message.then((msg) => {
-            if (session.output.join('').length > 3000) {
-              const startIndex = session.output.findIndex(
-                (line) => session.output.join('').length - line.length <= 3000
-              );
-              session.output.splice(0, startIndex);
-            }
-            const embed = new MessageEmbed()
-              .setTitle(`SSH session for server ${sshConfig.host}`)
-              .setFooter('You are now connected via SSH. Type your commands below.')
-              .setDescription( '```' + session.output.join('') + '```')
-              .setColor('#00FF00');
-            msg.edit({ embeds: [embed] });
-          });
-        });
+              session.output.push(output.replace(/\x1B\[[0-?]*[ -\/]*[@-~]/g, '')); // Remove escape sequences
+
+              const maxCharacterLength = 3000;
+              let updatedOutput = session.output.join('');
+
+              if (updatedOutput.length > maxCharacterLength) {
+                const linesToRemove = Math.ceil((updatedOutput.length - maxCharacterLength) / 3000);
+                updatedOutput = updatedOutput.slice(-maxCharacterLength);
+                const footerText = `The output exceeded the character limit. Removed ${linesToRemove} lines.`;
+                const updatedEmbed = new MessageEmbed()
+                  .setTitle(`SSH session for server "${sshConfig.host}"`)
+                  .setDescription('```' + updatedOutput + '```')
+                  .setColor('#00FF00')
+                  .setFooter(footerText);
+
+                session.message.edit({ embeds: [embed] });
+
+                session.output.splice(0, linesToRemove);
+              } else {
+                const updatedEmbed = new MessageEmbed()
+                  .setTitle(`SSH session for server "${sshConfig.host}"`)
+                  .setDescription('```' + updatedOutput + '```')
+                  .setColor('#00FF00');
+
+                session.message.edit({ embeds: [embed] });
+              }
+            });
 
         const collector = dmChannel.createMessageCollector({ filter: (m) => !m.author.bot });
         collector.on('collect', (m) => {
