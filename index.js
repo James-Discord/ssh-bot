@@ -116,7 +116,10 @@ client.on('messageCreate', async (message) => {
       .setDescription('Please select the configuration you want to delete:');
 
     rows.forEach((row, index) => {
-      configListEmbed.addField(`Configuration ${index + 1}`, `Host: ${row.host}\nPort: ${row.port}\nUsername: ${row.username}`);
+      const host = row.host || '-';
+      const port = row.port || '-';
+      const username = row.username || '-';
+      configListEmbed.addField(`Configuration ${index + 1}`, `Host: ${host}\nPort: ${port}\nUsername: ${username}`);
     });
 
     const dmChannel = await message.author.createDM();
@@ -144,12 +147,25 @@ client.on('messageCreate', async (message) => {
       const confirmationEmbed = new MessageEmbed()
         .setColor('#FFA500')
         .setTitle('Confirmation')
-        .setDescription('Are you sure you want to delete the following SSH configuration?')
-        .addField('Host', selectedConfig.host)
-        .addField('Port', selectedConfig.port)
-        .addField('Username', selectedConfig.username)
-        .addField('Password', selectedConfig.password)
-        .setFooter('Please type "confirm" to proceed.');
+        .setDescription('Are you sure you want to delete the following SSH configuration?');
+
+      if (selectedConfig.host) {
+        confirmationEmbed.addField('Host', selectedConfig.host);
+      }
+
+      if (selectedConfig.port) {
+        confirmationEmbed.addField('Port', selectedConfig.port);
+      }
+
+      if (selectedConfig.username) {
+        confirmationEmbed.addField('Username', selectedConfig.username);
+      }
+
+      if (selectedConfig.password) {
+        confirmationEmbed.addField('Password', selectedConfig.password);
+      }
+
+      confirmationEmbed.setFooter('Please type "confirm" to proceed.');
 
       await dmChannel.send({ embeds: [confirmationEmbed] });
 
