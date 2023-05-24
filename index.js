@@ -217,7 +217,7 @@ client.on('messageCreate', async (message) => {
       }
     });
   });
-  
+
     } else if (command === 'ssh') {
     const existingSession = activeSessions.get(message.author.id);
 
