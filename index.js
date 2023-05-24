@@ -119,7 +119,8 @@ client.on('messageCreate', async (message) => {
       const host = row.host || '-';
       const port = row.port || '-';
       const username = row.username || '-';
-      configListEmbed.addField(`Configuration ${index + 1}`, `Host: ${host}\nPort: ${port}\nUsername: ${username}`);
+      const description = `**Configuration ${index + 1}**\nHost: ${host}\nPort: ${port}\nUsername: ${username}\n`;
+      configListEmbed.setDescription(configListEmbed.description + description);
     });
 
     const dmChannel = await message.author.createDM();
@@ -147,25 +148,12 @@ client.on('messageCreate', async (message) => {
       const confirmationEmbed = new MessageEmbed()
         .setColor('#FFA500')
         .setTitle('Confirmation')
-        .setDescription('Are you sure you want to delete the following SSH configuration?');
-
-      if (selectedConfig.host) {
-        confirmationEmbed.addField('Host', selectedConfig.host);
-      }
-
-      if (selectedConfig.port) {
-        confirmationEmbed.addField('Port', selectedConfig.port);
-      }
-
-      if (selectedConfig.username) {
-        confirmationEmbed.addField('Username', selectedConfig.username);
-      }
-
-      if (selectedConfig.password) {
-        confirmationEmbed.addField('Password', selectedConfig.password);
-      }
-
-      confirmationEmbed.setFooter('Please type "confirm" to proceed.');
+        .setDescription('Are you sure you want to delete the following SSH configuration?\n')
+        .addField('Host', selectedConfig.host || '-')
+        .addField('Port', selectedConfig.port || '-')
+        .addField('Username', selectedConfig.username || '-')
+        .addField('Password', selectedConfig.password || '-')
+        .setFooter('Please type "confirm" to proceed.');
 
       await dmChannel.send({ embeds: [confirmationEmbed] });
 
@@ -217,7 +205,7 @@ client.on('messageCreate', async (message) => {
       }
     });
   });
-
+  
     } else if (command === 'ssh') {
     const existingSession = activeSessions.get(message.author.id);
 
