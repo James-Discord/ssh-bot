@@ -113,6 +113,12 @@ client.on('messageCreate', async (message) => {
             session.output.shift();
           }
           session.message.then((msg) => {
+            if (session.output.join('').length > 3000) {
+              const startIndex = session.output.findIndex(
+                (line) => session.output.join('').length - line.length <= 3000
+              );
+              session.output.splice(0, startIndex);
+            }
             const embed = new MessageEmbed()
               .setTitle(`SSH session for server ${sshConfig.host}`)
               .setDescription('You are now connected via SSH. Type your commands below.')
