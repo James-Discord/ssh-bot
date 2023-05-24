@@ -386,14 +386,16 @@ async function promptSSHInputs(dmChannel) {
       return null;
     }
 
+    if (prompt.name === 'port' && isNaN(response)) {
+      dmChannel.send('Invalid port number. Please run the code again and enter a valid port number.');
+      return null;
+    }
+
     sshConfig[prompt.name] = response;
   }
 
   return sshConfig;
 }
-
-
-
 
 async function askToSaveInputs(userId, dmChannel) {
   const embed = new MessageEmbed()
