@@ -203,14 +203,14 @@ client.on('messageCreate', async (message) => {
     } else {
       sshConfig = await promptSSHInputs(dmChannel);
       if (!sshConfig) {
-        await message.reply('Invalid or incomplete SSH inputs. Please try again.');
+        await dmChannel.send('Invalid or incomplete SSH inputs. Please try again.');
         return;
       }
 
       const saveInputs = await askToSaveInputs(message.author.id, dmChannel);
       if (saveInputs) {
         await saveSSHConfig(message.author.id, sshConfig);
-        await message.reply('SSH inputs saved successfully!');
+        await dmChannel.send('SSH inputs saved successfully!');
       }
     }
 
