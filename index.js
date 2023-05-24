@@ -40,7 +40,11 @@ client.on('messageCreate', async (message) => {
   const command = args.shift().toLowerCase();
 
   if (command === 'ping') {
-    await message.reply('Pong!');
+    const start = Date.now();
+    const sent = await message.reply('Pinging...');
+    const end = Date.now();
+    const ping = end - start;
+    sent.edit(`Pong! Latency: ${ping}ms, API Latency: ${client.ws.ping}ms`);
   } else if (command === 'hello') {
     await message.reply('Hello, world!');
   } else if (command === 'ssh') {
