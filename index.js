@@ -362,15 +362,12 @@ async function selectSSHConfig(configs, dmChannel) {
 async function promptSSHInputs(dmChannel) {
   const sshConfig = {};
 
-const prompts = [
-  { name: 'host', message: 'Enter the SSH host:', example: 'example.com' },
-  { name: 'port', message: 'Enter the SSH port:', example: '22' },
-  { name: 'username', message: 'Enter the SSH username:' },
-  { name: 'password', message: 'Enter the SSH password:', hidden: true },
-];
-
-async function getSSHConfig() {
-  const sshConfig = {};
+  const prompts = [
+    { name: 'host', message: 'Enter the SSH host:', example: 'example.com' },
+    { name: 'port', message: 'Enter the SSH port:', example: '22' },
+    { name: 'username', message: 'Enter the SSH username:' },
+    { name: 'password', message: 'Enter the SSH password:', hidden: true },
+  ];
 
   for (const prompt of prompts) {
     const embed = new MessageEmbed()
@@ -389,16 +386,13 @@ async function getSSHConfig() {
       return null;
     }
 
-    if (prompt.name === 'port' && !/^\d+$/.test(response)) {
-      dmChannel.send('Invalid port input. Please enter a valid port number and run the code again.');
-      return null;
-    }
-
     sshConfig[prompt.name] = response;
   }
 
   return sshConfig;
 }
+
+
 
 
 async function askToSaveInputs(userId, dmChannel) {
