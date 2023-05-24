@@ -89,7 +89,72 @@ client.on('messageCreate', async (message) => {
     .setFooter(`Requested by ${message.author.tag}`, message.author.avatarURL());
 
   await message.reply({ embeds: [botInfoEmbed] });
+  
+  } else if (command === 'ssh-delete') {
+  // Check the database for SSH configs of the user
+  const userId = message.author.id;
+  db.all('SELECT * FROM ssh_configs WHERE user_id = ?', [userId], async (err, rows) => {
+    if (err) {
+      console.error('Failed to fetch SSH configs:', err);
+      return;
+    }
 
+    if (rows.length === 0) {
+      await message.reply('You have no saved SSH configurations.');
+      return;
+    }
+
+    // Prompt the user with their SSH configs
+    const configList = rows.map((row, index) => `${index + 1}. Host: ${row.host}, Port: ${row.port}, Username: ${row.username}`);
+    const configMessage = `Your saved SSH configurations:\n${configList.join('\n')}\n\nPlease enter the number of the configuration you want to delete.`;
+    await message.reply(configMessage);
+
+    // Wait for user input
+    const filter = (response) => response.author.id === message.author.id;
+    const collector = message.channel.createMessageCollector({ filter, max: 1, time: 30000 });
+
+    collector.on('collect', async (response) => {
+      const input = response.content.trim();
+      const configIndex = parseInt(input, 10);
+
+      if (isNaN(configIndex) || configIndex <= 0 || configIndex > rows.length) {
+        await message.reply('Invalid input. Please enter a valid number from the list.');
+        return;
+      }
+
+      const selectedConfig = rows[configIndex - 1];
+      const confirmationMessage = `Are you sure you want to delete the SSH configuration:\nHost: ${selectedConfig.host}, Port: ${selectedConfig.port}, Username: ${selectedConfig.username}\n\nPlease type **confirm** to proceed.`;
+      await message.reply(confirmationMessage);
+
+      collector.on('end', async (collected) => {
+        if (collected.size === 0) {
+          await message.reply('No confirmation received. Aborting deletion.');
+          return;
+        }
+
+        const confirmation = collected.first().content.trim().toLowerCase();
+        if (confirmation === 'confirm') {
+          // Perform deletion
+          db.run('DELETE FROM ssh_configs WHERE id = ?', [selectedConfig.id], (deleteErr) => {
+            if (deleteErr) {
+              console.error('Failed to delete SSH config:', deleteErr);
+              return;
+            }
+            message.reply('SSH configuration deleted successfully.');
+          });
+        } else {
+          await message.reply('Deletion cancelled.');
+        }
+      });
+    });
+
+    collector.on('end', async (collected) => {
+      if (collected.size === 0) {
+        await message.reply('No input received. Aborting deletion.');
+      }
+    });
+  });
+    
   } else if (command === 'ssh') {
     const existingSession = activeSessions.get(message.author.id);
 
