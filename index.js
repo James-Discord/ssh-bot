@@ -430,5 +430,5 @@ async function saveSSHConfig(userId, config) {
 }
 
 
-const token = 'MTExMDI3MzI5MDY1MzY3NTU1MQ.GPZBH9.Qut3sr1BKdBOyTFvXgrdjSrGQAD5QrquXe29YE';
+const token = 'TOKEN';
 client.login(token);
